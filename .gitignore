@@ -1,0 +1,42 @@
+# ========================
+# Android / Gradle 빌드 산출물
+# ========================
+*.iml
+.gradle/
+/local.properties
+/build/
+app/build/
+
+# 릴리즈 APK / AAB (빌드 산출물 — 저장소에 포함 불필요)
+*.apk
+*.aab
+*.ap_
+/app/release/
+output-metadata.json
+
+# ========================
+# Android Studio / IntelliJ
+# ========================
+.idea/
+captures/
+.externalNativeBuild/
+.cxx/
+
+# ========================
+# Keystore (절대 커밋 금지)
+# ========================
+*.jks
+*.keystore
+keystore.properties
+
+# ========================
+# Claude Code
+# ========================
+.claude/
+
+# ========================
+# OS 생성 파일
+# ========================
+.DS_Store
+Thumbs.db
+*.orig

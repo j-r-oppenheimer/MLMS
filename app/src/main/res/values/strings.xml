@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MLMS</string>
+    <string name="tab_timetable">시간표</string>
+    <string name="tab_notice">공지사항</string>
+    <string name="tab_settings">설정</string>
+</resources>

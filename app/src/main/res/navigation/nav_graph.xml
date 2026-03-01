@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/nav_graph"
+    app:startDestination="@id/timetableFragment">
+
+    <fragment
+        android:id="@+id/timetableFragment"
+        android:name="com.cnumed.mlms.ui.timetable.TimetableFragment"
+        android:label="시간표" />
+
+    <fragment
+        android:id="@+id/noticeFragment"
+        android:name="com.cnumed.mlms.ui.notice.NoticeFragment"
+        android:label="공지사항">
+        <action
+            android:id="@+id/action_noticeFragment_to_noticeDetailFragment"
+            app:destination="@id/noticeDetailFragment" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/noticeDetailFragment"
+        android:name="com.cnumed.mlms.ui.notice.NoticeDetailFragment"
+        android:label="공지 상세">
+        <argument
+            android:name="url"
+            app:argType="string" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/settingsFragment"
+        android:name="com.cnumed.mlms.ui.settings.SettingsFragment"
+        android:label="설정" />
+
+</navigation>
