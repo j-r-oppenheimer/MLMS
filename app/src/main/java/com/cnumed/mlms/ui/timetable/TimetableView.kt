@@ -31,6 +31,19 @@ class TimetableView @JvmOverloads constructor(
 
     private var blockColor: Int = Color.parseColor("#8D9DB6")
     private var isDarkMode: Boolean = false
+    private var examHighlightEnabled: Boolean = true
+
+    private val examKeywords = listOf("시험", "중간", "기말", "평가")
+
+    private fun isExamClass(title: String) = examKeywords.any { it in title }
+
+    private fun examColor(base: Int, dark: Boolean): Int {
+        val r = Color.red(base); val g = Color.green(base); val b = Color.blue(base)
+        return if (dark)
+            Color.rgb(r + ((255 - r) * 0.20f).toInt(), g + ((255 - g) * 0.20f).toInt(), b + ((255 - b) * 0.20f).toInt())
+        else
+            Color.rgb((r * 0.85f).toInt(), (g * 0.85f).toInt(), (b * 0.85f).toInt())
+    }
 
     private val dp get() = context.resources.displayMetrics.density
     private val timeColW get() = 28f * dp
@@ -87,6 +100,8 @@ class TimetableView @JvmOverloads constructor(
         } catch (e: Exception) {
             Color.parseColor("#8D9DB6")
         }
+
+        examHighlightEnabled = prefs.getBoolean("exam_highlight", true)
 
         invalidate()
     }
@@ -260,6 +275,8 @@ class TimetableView @JvmOverloads constructor(
             if (layout.h < 4f * dp) continue
 
             // 1. 블록 배경 그리기
+            blockPaint.color = if (examHighlightEnabled && isExamClass(cls.title))
+                examColor(blockColor, isDarkMode) else blockColor
             canvas.drawRoundRect(RectF(layout.x, layout.y1, layout.x + layout.w, layout.y1 + layout.h), 6f * dp, 6f * dp, blockPaint)
 
             // 블록 영역 클리핑 (넘치는 텍스트는 말줄임 없이 그냥 잘림)

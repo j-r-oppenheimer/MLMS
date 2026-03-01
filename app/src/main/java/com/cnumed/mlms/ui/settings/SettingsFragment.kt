@@ -51,6 +51,11 @@ class SettingsFragment : Fragment() {
 
         val classPrefs = requireContext().getSharedPreferences("class_settings", Context.MODE_PRIVATE)
 
+        binding.switchExamHighlight.isChecked = classPrefs.getBoolean("exam_highlight", true)
+        binding.switchExamHighlight.setOnCheckedChangeListener { _, checked ->
+            classPrefs.edit().putBoolean("exam_highlight", checked).apply()
+        }
+
         // 알림 시간 설정
         val alarmHour   = classPrefs.getInt("alarm_hour", 8)
         val alarmMinute = classPrefs.getInt("alarm_minute", 0)
