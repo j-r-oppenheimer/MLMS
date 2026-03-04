@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.cnumed.mlms.data.repository.TimetableRepository
 import com.cnumed.mlms.domain.model.ClassItem
+import com.cnumed.mlms.domain.model.LessonDetail
 import com.cnumed.mlms.util.DateUtils
 import com.cnumed.mlms.widget.TimetableWidget
 import com.cnumed.mlms.widget.TimetableWidgetUpdateWorker
@@ -119,6 +120,12 @@ class TimetableViewModel @Inject constructor(
             _uiState.value = _uiState.value.copy(classes = filterClasses(classes))
         }
     }
+
+    suspend fun fetchLessonDetail(lpSeq: Int, currSeq: Int, acaSeq: Int): Result<LessonDetail> {
+        return repository.fetchLessonDetail(lpSeq, currSeq, acaSeq)
+    }
+
+    suspend fun downloadFile(file: com.cnumed.mlms.domain.model.LessonFile): Result<android.net.Uri> = repository.downloadFile(file)
 
     fun nextWeek() = loadWeek(_uiState.value.weekStart.plusWeeks(1))
     fun previousWeek() = loadWeek(_uiState.value.weekStart.minusWeeks(1))

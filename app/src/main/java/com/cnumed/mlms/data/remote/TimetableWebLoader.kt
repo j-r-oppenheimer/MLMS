@@ -94,7 +94,8 @@ class TimetableWebLoader @Inject constructor(
                                     return {
                                         title: e.title || '',
                                         start: e.start.format('YYYY-MM-DDTHH:mm:ss'),
-                                        end:   e.end ? e.end.format('YYYY-MM-DDTHH:mm:ss') : ''
+                                        end:   e.end ? e.end.format('YYYY-MM-DDTHH:mm:ss') : '',
+                                        url:   e.url || ''
                                     };
                                 });
                         } catch(ex) {
@@ -171,9 +172,9 @@ class TimetableWebLoader @Inject constructor(
                             val isCurrentWeek = weekStart == currentSunday
 
                             if (isCurrentWeek) {
-                                // 이번 주: 이미 로드된 이벤트 바로 추출 (추가 대기 없음)
-                                Log.d(TAG, "Current week — extracting immediately")
-                                extractEvents()
+                                // 이번 주: AJAX 완료를 폴링으로 감지 (최대 3000ms)
+                                Log.d(TAG, "Current week — polling for events")
+                                pollForEvents(view, weekStart, 0)
                             } else {
                                 // 다른 주: gotoDate 후 AJAX 완료를 폴링으로 감지 (최대 3000ms)
                                 val navJs = """
@@ -196,6 +197,114 @@ class TimetableWebLoader @Inject constructor(
 
                 Log.d(TAG, "Loading $weekStart via WebView")
                 webView.loadUrl(LmsApi.TIMETABLE_URL)
+            }
+        }
+
+    /**
+     * scheduleShow 페이지를 WebView로 로드 후 JS 실행 완료된 DOM에서
+     * 과목명, 강의실, 첨부파일 정보를 JSON으로 추출.
+     */
+    @SuppressLint("SetJavaScriptEnabled")
+    suspend fun loadLessonDetail(url: String): String =
+        suspendCancellableCoroutine { cont ->
+            Handler(Looper.getMainLooper()).post {
+                var settled = false
+                val webView = WebView(context)
+                webView.settings.apply {
+                    javaScriptEnabled = true
+                    domStorageEnabled = true
+                    userAgentString =
+                        "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 " +
+                        "(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+                }
+
+                val rawCookies = cookieStore.rawCookies
+                if (rawCookies.isNotEmpty()) {
+                    rawCookies.split(";").forEach { cookie ->
+                        CookieManager.getInstance().setCookie(LmsApi.BASE_URL, cookie.trim())
+                    }
+                }
+                CookieManager.getInstance().setAcceptCookie(true)
+
+                val mainHandler = Handler(Looper.getMainLooper())
+
+                fun resolve(json: String) {
+                    if (!settled) {
+                        settled = true
+                        webView.destroy()
+                        cont.resume(json)
+                    }
+                }
+
+                val timeoutRunnable = Runnable {
+                    Log.w(TAG, "loadLessonDetail timeout")
+                    resolve("{}")
+                }
+                mainHandler.postDelayed(timeoutRunnable, 15_000)
+
+                cont.invokeOnCancellation {
+                    mainHandler.removeCallbacks(timeoutRunnable)
+                    Handler(Looper.getMainLooper()).post { webView.destroy() }
+                }
+
+                webView.webViewClient = object : WebViewClient() {
+                    override fun onPageFinished(view: WebView, loadedUrl: String) {
+                        if (settled) return
+                        mainHandler.postDelayed({
+                            if (settled) return@postDelayed
+                            val js = """
+                            (function() {
+                                var subjectEl = document.getElementById('subject');
+                                var subject = '';
+                                if (subjectEl) {
+                                    for (var i = 0; i < subjectEl.childNodes.length; i++) {
+                                        if (subjectEl.childNodes[i].nodeType === 3) {
+                                            subject = subjectEl.childNodes[i].textContent.trim();
+                                            if (subject) break;
+                                        }
+                                    }
+                                }
+
+                                var room = '';
+                                var lis = document.querySelectorAll('ul.content-list li');
+                                for (var i = 0; i < lis.length; i++) {
+                                    var t = lis[i].textContent.trim();
+                                    if (t && t.indexOf('교시') === -1 && t.indexOf('~') === -1
+                                        && t !== '강의' && t !== '실습' && t !== '세미나' && t !== '시험') {
+                                        room = t;
+                                        break;
+                                    }
+                                }
+
+                                var files = [];
+                                var links = document.querySelectorAll('#lesson_plan_data a[onclick*="attachEvent"]');
+                                for (var i = 0; i < links.length; i++) {
+                                    var onclick = links[i].getAttribute('onclick') || '';
+                                    var m = onclick.match(/attachEvent\s*\(\s*'[^']*'\s*,\s*'([^']+)'\s*,\s*'([^']+)'\s*,\s*'(\d+)'\s*,\s*'(\d+)'/);
+                                    if (m) {
+                                        files.push({path: m[1], name: m[2], attachSeq: m[3], dataSeq: m[4]});
+                                    }
+                                }
+
+                                return JSON.stringify({subject: subject, room: room, files: files});
+                            })()
+                            """.trimIndent()
+
+                            view.evaluateJavascript(js) { result ->
+                                mainHandler.removeCallbacks(timeoutRunnable)
+                                val cleaned = result
+                                    ?.trim()
+                                    ?.removeSurrounding("\"")
+                                    ?.replace("\\\"", "\"")
+                                    ?.replace("\\\\", "\\")
+                                    ?: "{}"
+                                resolve(cleaned)
+                            }
+                        }, 1500)
+                    }
+                }
+
+                webView.loadUrl(url)
             }
         }
 

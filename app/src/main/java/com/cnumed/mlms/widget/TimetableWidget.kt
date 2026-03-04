@@ -347,7 +347,7 @@ class TimetableWidget : AppWidgetProvider() {
                 color = textColor; textAlign = Paint.Align.CENTER; textSize = textSm
             }
             val todayTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                color = if (isDarkMode) Color.WHITE else Color.parseColor("#333333")
+                color = if (isDarkMode) Color.WHITE else Color.parseColor("#555555")
                 textAlign = Paint.Align.CENTER; textSize = textSm; isFakeBoldText = true
             }
             val timeTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -418,6 +418,7 @@ class TimetableWidget : AppWidgetProvider() {
 
                 blockPaint.color = if (examHighlight && isExamClass(cls.title))
                     examColor(customColor, isDarkMode) else customColor
+                blockPaint.alpha = blockAlpha
                 canvas.drawRoundRect(RectF(layout.x, layout.y1, layout.x + layout.bw, layout.y1 + layout.bh), 3f, 3f, blockPaint)
 
                 // 교수 이름 공간을 미리 예약해 제목 클리핑 높이 결정

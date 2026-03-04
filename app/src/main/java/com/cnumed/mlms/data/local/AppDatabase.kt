@@ -9,7 +9,7 @@ import com.cnumed.mlms.data.local.entity.NoticeEntity
 
 @Database(
     entities = [ClassEntity::class, NoticeEntity::class],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {

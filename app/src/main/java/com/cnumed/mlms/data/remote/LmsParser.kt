@@ -1,12 +1,15 @@
 package com.cnumed.mlms.data.remote
 
 import com.cnumed.mlms.domain.model.ClassItem
+import com.cnumed.mlms.domain.model.LessonDetail
+import com.cnumed.mlms.domain.model.LessonFile
 import com.cnumed.mlms.domain.model.Notice
 import org.json.JSONArray
 import org.json.JSONObject
 import org.jsoup.Jsoup
 import java.time.LocalDate
 import java.time.LocalTime
+import java.net.URLEncoder
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -305,6 +308,7 @@ class LmsParser @Inject constructor() {
 
     private fun parseTimetableJson(json: String, weekStart: LocalDate): List<ClassItem> {
         val classes = mutableListOf<ClassItem>()
+        val popupRegex = Regex("""showPopup\((\d+),(\d+),(\d+)\)""")
         try {
             val arr = JSONArray(json)
             for (i in 0 until arr.length()) {
@@ -313,6 +317,7 @@ class LmsParser @Inject constructor() {
                 val rawProfessor = obj.optString("professor").ifEmpty { obj.optString("profName", "") }
                 val start = obj.optString("start")
                 val end = obj.optString("end", "")
+                val url = obj.optString("url", "")
 
                 if (rawTitle.isEmpty() || start.isEmpty()) continue
 
@@ -321,6 +326,12 @@ class LmsParser @Inject constructor() {
                 // 요청한 주차 범위(weekStart ~ weekStart+6)에 속하는 이벤트만 처리
                 val weekEnd = weekStart.plusDays(6)
                 if (startDate < weekStart || startDate > weekEnd) continue
+
+                // showPopup(lp_seq, curr_seq, aca_seq) 파싱
+                val seqMatch = popupRegex.find(url)
+                val lpSeq = seqMatch?.groupValues?.get(1)?.toIntOrNull()
+                val currSeq = seqMatch?.groupValues?.get(2)?.toIntOrNull()
+                val acaSeq = seqMatch?.groupValues?.get(3)?.toIntOrNull()
 
                 // WebView FullCalendar 추출 시 교수명이 제목에 포함됨 → 분리
                 val (title, professor) = if (rawProfessor.isEmpty()) {
@@ -342,12 +353,77 @@ class LmsParser @Inject constructor() {
                         date = startDate,
                         startTime = startTime,
                         endTime = endTime,
-                        weekStart = weekStart
+                        weekStart = weekStart,
+                        lpSeq = lpSeq,
+                        currSeq = currSeq,
+                        acaSeq = acaSeq
                     )
                 )
             }
         } catch (_: Exception) { }
         return classes
+    }
+
+    // ──────────────────────────────────────────────
+    // 수업 자료 파싱
+    // ──────────────────────────────────────────────
+    fun parseLessonDetail(html: String): LessonDetail {
+        val doc = Jsoup.parse(html, LmsApi.BASE_URL)
+
+        // 과목명
+        val subjectEl = doc.selectFirst("#subject")
+        val subject = subjectEl?.ownText()?.trim() ?: ""
+        val subjectFinal = subject.ifEmpty {
+            subjectEl?.textNodes()?.firstOrNull()?.text()?.trim() ?: ""
+        }
+
+        // 강의실
+        var room = ""
+        val listItems = doc.select("ul.content-list li")
+        for (li in listItems) {
+            val text = li.text().trim()
+            if (text.isNotEmpty() && !text.contains("교시") && !text.contains("~")
+                && text != "강의" && text != "실습" && text != "세미나" && text != "시험") {
+                room = text
+                break
+            }
+        }
+
+        // 첨부파일
+        val files = mutableListOf<LessonFile>()
+        val attachRegex = Regex("""attachEvent\s*\(\s*'[^']*'\s*,\s*'([^']+)'\s*,\s*'([^']+)'""")
+
+        doc.select("[onclick*=attachEvent]").forEach { el ->
+            val match = attachRegex.find(el.attr("onclick")) ?: return@forEach
+            files.add(LessonFile(match.groupValues[2], buildDownloadUrl(match.groupValues[1], match.groupValues[2])))
+        }
+        if (files.isEmpty()) {
+            doc.select("#lesson_plan_data a").forEach { a ->
+                val match = attachRegex.find(a.attr("onclick")) ?: return@forEach
+                files.add(LessonFile(match.groupValues[2], buildDownloadUrl(match.groupValues[1], match.groupValues[2])))
+            }
+        }
+        if (files.isEmpty()) {
+            val scripts = doc.select("script:not([src])").joinToString("\n") { it.data() }
+            attachRegex.findAll(scripts).forEach { match ->
+                files.add(LessonFile(match.groupValues[2], buildDownloadUrl(match.groupValues[1], match.groupValues[2])))
+            }
+        }
+        if (files.isEmpty()) {
+            doc.select("a[href*=/file/download]").forEach { a ->
+                val href = a.attr("abs:href")
+                val name = a.text().trim().ifEmpty { "첨부파일" }
+                if (href.isNotEmpty()) files.add(LessonFile(name, href))
+            }
+        }
+
+        return LessonDetail(subject = subjectFinal, room = room, files = files)
+    }
+
+    private fun buildDownloadUrl(filePath: String, fileName: String): String {
+        val encodedPath = URLEncoder.encode(filePath, "UTF-8")
+        val encodedName = URLEncoder.encode(fileName, "UTF-8")
+        return "${LmsApi.BASE_URL}/file/download?file_path=$encodedPath&file_name=$encodedName"
     }
 
     // ──────────────────────────────────────────────

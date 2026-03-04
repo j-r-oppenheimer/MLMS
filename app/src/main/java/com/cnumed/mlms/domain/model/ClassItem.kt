@@ -11,5 +11,8 @@ data class ClassItem(
     val date: LocalDate,
     val startTime: LocalTime,
     val endTime: LocalTime,
-    val weekStart: LocalDate  // 해당 주의 일요일
+    val weekStart: LocalDate, // 해당 주의 일요일
+    val lpSeq: Int? = null,
+    val currSeq: Int? = null,
+    val acaSeq: Int? = null
 )

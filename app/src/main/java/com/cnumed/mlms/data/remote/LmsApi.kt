@@ -18,6 +18,7 @@ class LmsApi @Inject constructor(private val client: OkHttpClient) {
         const val NOTICE_URL = "$BASE_URL/common/SLife/notice/list"
         const val NOTICE_AJAX_URL = "$BASE_URL/ajax/common/SLife/notice/list"
         const val TIMETABLE_URL = "$BASE_URL/aca/MYscheduleMST"
+        const val SCHEDULE_SHOW_URL = "$BASE_URL/st/lesson/scheduleShow"
     }
 
     suspend fun get(url: String): String = getWithFinalUrl(url).second
