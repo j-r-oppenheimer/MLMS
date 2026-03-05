@@ -67,12 +67,12 @@ class TimetableViewModel @Inject constructor(
     }
 
     fun loadWeek(weekStart: LocalDate) {
-        // 세션 캐시에 없을 때만 로딩 표시
-        val needsFetch = !sessionCache.containsKey(weekStart)
-        Log.d(TAG, "loadWeek($weekStart) needsFetch=$needsFetch")
+        // ViewModel 세션 캐시 또는 Repository 벌크 캐시에 있으면 로딩 표시 안 함
+        val isCached = sessionCache.containsKey(weekStart) || repository.isWeekCached(weekStart)
+        Log.d(TAG, "loadWeek($weekStart) cached=$isCached")
         _uiState.value = _uiState.value.copy(
             weekStart = weekStart,
-            isLoading = needsFetch,
+            isLoading = !isCached,
             error = null
         )
 
@@ -84,8 +84,8 @@ class TimetableViewModel @Inject constructor(
             }
         }
 
-        // 네트워크 패치: 세션 캐시에 없을 때만 실행
-        if (needsFetch) {
+        // 캐시에 없을 때만 네트워크 패치
+        if (!isCached) {
             viewModelScope.launch {
                 val result = repository.fetchWeek(weekStart)
 
@@ -93,8 +93,6 @@ class TimetableViewModel @Inject constructor(
                     val newClasses = result.getOrDefault(emptyList())
                     Log.d(TAG, "fetchWeek result: ${newClasses.size} classes")
                     if (newClasses.isNotEmpty()) {
-                        // 실제 수업이 있을 때만 캐시 등록 + 위젯 갱신
-                        // 빈 결과는 네트워크 불안정으로 인한 오인식일 수 있으므로 재시도 허용
                         sessionCache[weekStart] = true
                         syncWidget(weekStart, newClasses)
                     }
@@ -136,6 +134,7 @@ class TimetableViewModel @Inject constructor(
     // refresh()는 명시적 새로고침이므로 캐시 무시
     fun refresh() {
         sessionCache.remove(_uiState.value.weekStart)
+        repository.invalidateCache()
         loadWeek(_uiState.value.weekStart)
     }
 

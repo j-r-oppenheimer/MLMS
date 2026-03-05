@@ -4,6 +4,7 @@ import com.cnumed.mlms.domain.model.ClassItem
 import com.cnumed.mlms.domain.model.LessonDetail
 import com.cnumed.mlms.domain.model.LessonFile
 import com.cnumed.mlms.domain.model.Notice
+import com.cnumed.mlms.util.DateUtils
 import org.json.JSONArray
 import org.json.JSONObject
 import org.jsoup.Jsoup
@@ -307,6 +308,16 @@ class LmsParser @Inject constructor() {
     }
 
     private fun parseTimetableJson(json: String, weekStart: LocalDate): List<ClassItem> {
+        return parseAllTimetableJson(json).filter {
+            val weekEnd = weekStart.plusDays(6)
+            it.date in weekStart..weekEnd
+        }.map { it.copy(weekStart = weekStart) }
+    }
+
+    /**
+     * 전체 이벤트를 주차 필터 없이 파싱. 각 이벤트의 weekStart는 날짜에서 자동 계산.
+     */
+    fun parseAllTimetableJson(json: String): List<ClassItem> {
         val classes = mutableListOf<ClassItem>()
         val popupRegex = Regex("""showPopup\((\d+),(\d+),(\d+)\)""")
         try {
@@ -322,10 +333,6 @@ class LmsParser @Inject constructor() {
                 if (rawTitle.isEmpty() || start.isEmpty()) continue
 
                 val startDate = LocalDate.parse(start.take(10))
-
-                // 요청한 주차 범위(weekStart ~ weekStart+6)에 속하는 이벤트만 처리
-                val weekEnd = weekStart.plusDays(6)
-                if (startDate < weekStart || startDate > weekEnd) continue
 
                 // showPopup(lp_seq, curr_seq, aca_seq) 파싱
                 val seqMatch = popupRegex.find(url)
@@ -353,7 +360,7 @@ class LmsParser @Inject constructor() {
                         date = startDate,
                         startTime = startTime,
                         endTime = endTime,
-                        weekStart = weekStart,
+                        weekStart = DateUtils.getWeekStart(startDate),
                         lpSeq = lpSeq,
                         currSeq = currSeq,
                         acaSeq = acaSeq

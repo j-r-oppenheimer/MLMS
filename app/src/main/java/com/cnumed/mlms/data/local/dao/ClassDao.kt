@@ -9,6 +9,9 @@ interface ClassDao {
     @Query("SELECT * FROM classes WHERE weekStart = :weekStart ORDER BY dayOfWeek, startTime")
     fun getClassesByWeek(weekStart: String): Flow<List<ClassEntity>>
 
+    @Query("SELECT * FROM classes WHERE weekStart = :weekStart ORDER BY dayOfWeek, startTime")
+    suspend fun getClassesByWeekOnce(weekStart: String): List<ClassEntity>
+
     @Query("SELECT * FROM classes WHERE date = :date ORDER BY startTime")
     fun getClassesByDate(date: String): Flow<List<ClassEntity>>
 

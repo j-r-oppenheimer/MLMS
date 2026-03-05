@@ -37,6 +37,10 @@ class TimetableRepository @Inject constructor(
     private val httpClient: OkHttpClient,
     private val cookieStore: SessionCookieStore
 ) {
+    // 벌크 로드된 주차 범위 캐시 (min ~ max 사이의 모든 주가 커버됨)
+    private var cachedRangeMin: LocalDate? = null
+    private var cachedRangeMax: LocalDate? = null
+
     fun getClassesForWeek(weekStart: LocalDate): Flow<List<ClassItem>> =
         classDao.getClassesByWeek(weekStart.toString())
             .map { list -> list.map { it.toDomain() } }
@@ -45,30 +49,59 @@ class TimetableRepository @Inject constructor(
         classDao.getClassesByDate(LocalDate.now().toString())
             .map { list -> list.map { it.toDomain() } }
 
+    /** 캐시 범위 안이면 true (해당 주에 수업이 0개여도 이미 확인된 것) */
+    fun isWeekCached(weekStart: LocalDate): Boolean {
+        val min = cachedRangeMin ?: return false
+        val max = cachedRangeMax ?: return false
+        return weekStart in min..max
+    }
+
+    /** 캐시 무효화 (새로고침용) */
+    fun invalidateCache() {
+        cachedRangeMin = null
+        cachedRangeMax = null
+    }
+
     suspend fun fetchWeek(weekStart: LocalDate): Result<List<ClassItem>> {
         return try {
+            // 캐시 범위 안이면 DB에서 바로 반환
+            if (isWeekCached(weekStart)) {
+                Log.d(TAG, "Week $weekStart in cached range — using DB")
+                val cached = classDao.getClassesByWeekOnce(weekStart.toString())
+                    .map { it.toDomain() }
+                return Result.success(cached)
+            }
+
             if (!sessionManager.ensureSession()) {
                 return Result.failure(Exception("로그인이 필요합니다"))
             }
 
-            // WebView로 시간표 로드 → FullCalendar JS API로 이벤트 추출
-            val json = webLoader.loadWeekEvents(weekStart)
-            Log.d(TAG, "WebView events len=${json.length} | preview=${json.take(300)}")
+            // WebView에서 FullCalendar 전체 이벤트 한 번에 추출
+            val json = webLoader.loadAllEvents()
+            Log.d(TAG, "WebView all events len=${json.length} | preview=${json.take(300)}")
 
-            val classes = parser.parseTimetable(json, weekStart)
-            Log.d(TAG, "Parsed ${classes.size} classes")
+            val allClasses = parser.parseAllTimetableJson(json)
+            Log.d(TAG, "Parsed ${allClasses.size} total classes across all weeks")
 
-            if (classes.isEmpty()) {
-                // 빈 결과 = 해당 주에 수업이 없음 (네트워크는 성공)
-                // DB는 건드리지 않고 success(emptyList) 반환 → 위젯은 캐시 저장, 앱은 기존 DB 유지
-                Log.d(TAG, "Empty result for $weekStart — no classes this week")
+            if (allClasses.isEmpty()) {
+                Log.d(TAG, "Empty result — no classes loaded from calendar")
                 return Result.success(emptyList())
             }
 
-            classDao.deleteByWeek(weekStart.toString())
-            classDao.insertAll(classes.map { ClassEntity.fromDomain(it) })
+            // 주차별 그룹핑 → DB에 일괄 저장
+            val byWeek = allClasses.groupBy { it.weekStart }
+            for ((week, classes) in byWeek) {
+                classDao.deleteByWeek(week.toString())
+                classDao.insertAll(classes.map { ClassEntity.fromDomain(it) })
+            }
 
-            Result.success(classes)
+            // 캐시 범위 갱신: 이벤트가 존재하는 최소~최대 주차
+            val weeks = byWeek.keys.sorted()
+            cachedRangeMin = weeks.first()
+            cachedRangeMax = weeks.last()
+            Log.d(TAG, "Cached range: $cachedRangeMin ~ $cachedRangeMax (${byWeek.size} weeks)")
+
+            Result.success(byWeek[weekStart] ?: emptyList())
         } catch (e: Exception) {
             Log.e(TAG, "fetchWeek failed", e)
             Result.failure(e)

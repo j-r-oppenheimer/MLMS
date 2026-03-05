@@ -10,7 +10,6 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.suspendCancellableCoroutine
-import java.time.LocalDate
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.resume
@@ -25,8 +24,12 @@ class TimetableWebLoader @Inject constructor(
     @ApplicationContext private val context: Context,
     private val cookieStore: SessionCookieStore
 ) {
+    /**
+     * WebView에서 FullCalendar가 보유한 **전체** clientEvents를 추출.
+     * 날짜 필터 없이 모든 이벤트를 반환하므로 한 번 호출로 여러 주차 데이터를 얻을 수 있음.
+     */
     @SuppressLint("SetJavaScriptEnabled")
-    suspend fun loadWeekEvents(weekStart: LocalDate): String =
+    suspend fun loadAllEvents(): String =
         suspendCancellableCoroutine { cont ->
             Handler(Looper.getMainLooper()).post {
                 var settled = false
@@ -59,7 +62,7 @@ class TimetableWebLoader @Inject constructor(
                 }
 
                 val timeoutRunnable = Runnable {
-                    Log.w(TAG, "TimetableWebLoader timeout for $weekStart")
+                    Log.w(TAG, "TimetableWebLoader timeout")
                     resolve("[]")
                 }
                 mainHandler.postDelayed(timeoutRunnable, 35_000)
@@ -69,10 +72,9 @@ class TimetableWebLoader @Inject constructor(
                     Handler(Looper.getMainLooper()).post { webView.destroy() }
                 }
 
-                fun extractEvents() {
+                fun extractAllEvents() {
                     mainHandler.removeCallbacks(timeoutRunnable)
-                    val weekEnd = weekStart.plusDays(6)
-                    // 해당 주차 날짜만 필터링하여 추출
+                    // 날짜 필터 없이 전체 clientEvents 추출
                     val js = """
                     (function() {
                         try {
@@ -82,14 +84,8 @@ class TimetableWebLoader @Inject constructor(
                             if (!jq) return [];
                             var events = jq(fcEl).fullCalendar('clientEvents');
                             if (!events || events.length === 0) return [];
-                            var start = '$weekStart';
-                            var end   = '$weekEnd';
                             return events
-                                .filter(function(e) {
-                                    if (!e.start) return false;
-                                    var d = e.start.format('YYYY-MM-DD');
-                                    return d >= start && d <= end;
-                                })
+                                .filter(function(e) { return !!e.start; })
                                 .map(function(e) {
                                     return {
                                         title: e.title || '',
@@ -105,29 +101,20 @@ class TimetableWebLoader @Inject constructor(
                     """.trimIndent()
 
                     webView.evaluateJavascript(js) { result ->
-                        Log.d(TAG, "Events JS result (${result?.length}): ${result?.take(300)}")
+                        Log.d(TAG, "All events JS result (${result?.length}): ${result?.take(300)}")
                         resolve(result ?: "[]")
                     }
                 }
 
-                // gotoDate 후 이벤트 로드를 300ms 간격으로 폴링 (최대 10회 = 3초)
-                fun pollForEvents(view: WebView, targetWeek: LocalDate, attempt: Int) {
+                // 이벤트 로드를 300ms 간격으로 폴링 (최대 10회 = 3초)
+                fun pollForEvents(view: WebView, attempt: Int) {
                     if (settled) return
-                    val weekEnd = targetWeek.plusDays(6)
                     val checkJs = """
                     (function() {
                         try {
                             var jq = window.jQuery || window.${'$'};
                             var events = jq('.fc').fullCalendar('clientEvents');
-                            if (!events || events.length === 0) return 0;
-                            var start = '$targetWeek';
-                            var end = '$weekEnd';
-                            var count = events.filter(function(e) {
-                                if (!e.start) return false;
-                                var d = e.start.format('YYYY-MM-DD');
-                                return d >= start && d <= end;
-                            }).length;
-                            return count;
+                            return events ? events.length : 0;
                         } catch(e) { return -1; }
                     })()
                     """.trimIndent()
@@ -135,16 +122,16 @@ class TimetableWebLoader @Inject constructor(
                         if (settled) return@postDelayed
                         view.evaluateJavascript(checkJs) { r ->
                             val count = r?.trim()?.toIntOrNull() ?: -1
-                            Log.d(TAG, "Poll attempt ${attempt + 1}: $count events for $targetWeek")
+                            Log.d(TAG, "Poll attempt ${attempt + 1}: $count total events")
                             when {
                                 count > 0 -> {
                                     Log.d(TAG, "Events found after ${(attempt + 1) * 300}ms")
-                                    extractEvents()
+                                    extractAllEvents()
                                 }
-                                attempt < 9 -> pollForEvents(view, targetWeek, attempt + 1)
+                                attempt < 9 -> pollForEvents(view, attempt + 1)
                                 else -> {
                                     Log.w(TAG, "Poll timeout — extracting anyway")
-                                    extractEvents()
+                                    extractAllEvents()
                                 }
                             }
                         }
@@ -160,42 +147,16 @@ class TimetableWebLoader @Inject constructor(
                         if (!url.contains("MYscheduleMST", ignoreCase = true)) return
                         calendarLoaded = true
 
-                        // 1. FullCalendar 초기화 대기 (500ms로 단축)
+                        // FullCalendar 초기화 + AJAX 로드 대기 후 전체 이벤트 추출
                         mainHandler.postDelayed({
                             if (settled) return@postDelayed
-
-                            val currentSunday = run {
-                                val today = java.time.LocalDate.now()
-                                val dow = today.dayOfWeek.value
-                                today.minusDays((dow % 7).toLong())
-                            }
-                            val isCurrentWeek = weekStart == currentSunday
-
-                            if (isCurrentWeek) {
-                                // 이번 주: AJAX 완료를 폴링으로 감지 (최대 3000ms)
-                                Log.d(TAG, "Current week — polling for events")
-                                pollForEvents(view, weekStart, 0)
-                            } else {
-                                // 다른 주: gotoDate 후 AJAX 완료를 폴링으로 감지 (최대 3000ms)
-                                val navJs = """
-                                (function() {
-                                    try {
-                                        var jq = window.jQuery || window.${'$'};
-                                        jq('.fc').fullCalendar('gotoDate', '$weekStart');
-                                        return 'ok';
-                                    } catch(e) { return 'err:' + e; }
-                                })()
-                                """.trimIndent()
-                                view.evaluateJavascript(navJs) { r ->
-                                    Log.d(TAG, "gotoDate('$weekStart') = $r")
-                                    pollForEvents(view, weekStart, 0)
-                                }
-                            }
+                            Log.d(TAG, "Polling for all events")
+                            pollForEvents(view, 0)
                         }, 500)
                     }
                 }
 
-                Log.d(TAG, "Loading $weekStart via WebView")
+                Log.d(TAG, "Loading timetable via WebView")
                 webView.loadUrl(LmsApi.TIMETABLE_URL)
             }
         }
