@@ -1,5 +1,6 @@
 package com.cnumed.mlms.ui.login
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.cnumed.mlms.data.remote.LoginResult
@@ -34,6 +35,7 @@ class LoginViewModel @Inject constructor(
             return
         }
         viewModelScope.launch {
+            Log.d(TAG, "Login attempt for user=$id")
             _uiState.value = LoginUiState.Loading
             val result = sessionManager.login(id, pwd)
             if (result is LoginResult.Success && saveCredentials) {
@@ -41,9 +43,19 @@ class LoginViewModel @Inject constructor(
                 securePrefs.setAutoLogin(true)
             }
             _uiState.value = when (result) {
-                is LoginResult.Success -> LoginUiState.Success
-                is LoginResult.Failure -> LoginUiState.Error(result.message)
+                is LoginResult.Success -> {
+                    Log.d(TAG, "Login success")
+                    LoginUiState.Success
+                }
+                is LoginResult.Failure -> {
+                    Log.w(TAG, "Login failed: ${result.message}")
+                    LoginUiState.Error(result.message)
+                }
             }
         }
+    }
+
+    companion object {
+        private const val TAG = "LoginViewModel"
     }
 }

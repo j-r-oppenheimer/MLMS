@@ -69,7 +69,8 @@ class TimetableWidgetUpdateWorker @AssistedInject constructor(
             // 정기 업무인 경우만 다음 스케줄 등록
             if (weekStartStr == null) schedule(applicationContext)
             Result.success()
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            android.util.Log.e("WidgetUpdateWorker", "doWork failed", e)
             Result.retry()
         }
     }

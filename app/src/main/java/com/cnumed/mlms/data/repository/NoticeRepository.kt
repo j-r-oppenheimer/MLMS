@@ -50,6 +50,7 @@ class NoticeRepository @Inject constructor(
 
             Result.success(notices)
         } catch (e: Exception) {
+            android.util.Log.e("NoticeRepository", "fetchNotices failed", e)
             Result.failure(e)
         }
     }

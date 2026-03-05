@@ -158,11 +158,10 @@ class TimetableFragment : Fragment() {
     }
 
     private fun downloadFile(file: LessonFile) {
-        Toast.makeText(requireContext(), "${file.fileName} 다운로드 중...", Toast.LENGTH_SHORT).show()
         viewLifecycleOwner.lifecycleScope.launch {
             val result = viewModel.downloadFile(file)
             if (result.isSuccess) {
-                Toast.makeText(requireContext(), "${file.fileName} 다운로드 완료", Toast.LENGTH_SHORT).show()
+                Toast.makeText(requireContext(), "${file.fileName} 다운로드 시작", Toast.LENGTH_SHORT).show()
             } else {
                 Toast.makeText(requireContext(), "다운로드 실패: ${result.exceptionOrNull()?.message}", Toast.LENGTH_SHORT).show()
             }

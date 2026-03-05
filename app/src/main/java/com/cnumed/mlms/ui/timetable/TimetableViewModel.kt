@@ -3,6 +3,7 @@ package com.cnumed.mlms.ui.timetable
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.cnumed.mlms.data.repository.TimetableRepository
@@ -68,6 +69,7 @@ class TimetableViewModel @Inject constructor(
     fun loadWeek(weekStart: LocalDate) {
         // 세션 캐시에 없을 때만 로딩 표시
         val needsFetch = !sessionCache.containsKey(weekStart)
+        Log.d(TAG, "loadWeek($weekStart) needsFetch=$needsFetch")
         _uiState.value = _uiState.value.copy(
             weekStart = weekStart,
             isLoading = needsFetch,
@@ -89,6 +91,7 @@ class TimetableViewModel @Inject constructor(
 
                 if (result.isSuccess) {
                     val newClasses = result.getOrDefault(emptyList())
+                    Log.d(TAG, "fetchWeek result: ${newClasses.size} classes")
                     if (newClasses.isNotEmpty()) {
                         // 실제 수업이 있을 때만 캐시 등록 + 위젯 갱신
                         // 빈 결과는 네트워크 불안정으로 인한 오인식일 수 있으므로 재시도 허용
@@ -125,7 +128,7 @@ class TimetableViewModel @Inject constructor(
         return repository.fetchLessonDetail(lpSeq, currSeq, acaSeq)
     }
 
-    suspend fun downloadFile(file: com.cnumed.mlms.domain.model.LessonFile): Result<android.net.Uri> = repository.downloadFile(file)
+    suspend fun downloadFile(file: com.cnumed.mlms.domain.model.LessonFile): Result<Long> = repository.downloadFile(file)
 
     fun nextWeek() = loadWeek(_uiState.value.weekStart.plusWeeks(1))
     fun previousWeek() = loadWeek(_uiState.value.weekStart.minusWeeks(1))
@@ -134,5 +137,9 @@ class TimetableViewModel @Inject constructor(
     fun refresh() {
         sessionCache.remove(_uiState.value.weekStart)
         loadWeek(_uiState.value.weekStart)
+    }
+
+    companion object {
+        private const val TAG = "TimetableViewModel"
     }
 }

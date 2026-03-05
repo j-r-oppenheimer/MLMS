@@ -1,14 +1,14 @@
 package com.cnumed.mlms.data.repository
 
-import android.content.ContentValues
+import android.app.DownloadManager
 import android.content.Context
 import android.os.Environment
-import android.provider.MediaStore
 import android.util.Log
 import com.cnumed.mlms.data.local.dao.ClassDao
 import com.cnumed.mlms.data.local.entity.ClassEntity
 import com.cnumed.mlms.data.remote.LmsApi
 import com.cnumed.mlms.data.remote.LmsParser
+import com.cnumed.mlms.data.remote.SessionCookieStore
 import com.cnumed.mlms.data.remote.SessionManager
 import com.cnumed.mlms.data.remote.TimetableWebLoader
 import com.cnumed.mlms.domain.model.ClassItem
@@ -18,7 +18,6 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import android.net.Uri
 import org.json.JSONObject
 import kotlinx.coroutines.flow.Flow
@@ -35,7 +34,8 @@ class TimetableRepository @Inject constructor(
     private val parser: LmsParser,
     private val classDao: ClassDao,
     private val sessionManager: SessionManager,
-    private val httpClient: OkHttpClient
+    private val httpClient: OkHttpClient,
+    private val cookieStore: SessionCookieStore
 ) {
     fun getClassesForWeek(weekStart: LocalDate): Flow<List<ClassItem>> =
         classDao.getClassesByWeek(weekStart.toString())
@@ -121,13 +121,14 @@ class TimetableRepository @Inject constructor(
     }
 
     /**
-     * OkHttp(세션 쿠키 포함)로 파일 다운로드 → MediaStore를 통해 Downloads 폴더에 저장.
+     * DownloadManager를 사용하여 파일 다운로드.
+     * 시스템 알림바에 진행률이 자동으로 표시됩니다.
      */
-    suspend fun downloadFile(file: LessonFile): Result<Uri> = withContext(Dispatchers.IO) {
+    suspend fun downloadFile(file: LessonFile): Result<Long> = withContext(Dispatchers.IO) {
         try {
             // 1. 서버에 읽음 처리 요청 (이걸 먼저 해야 다운로드 허용됨)
             if (file.attachSeq.isNotEmpty() && file.dataSeq.isNotEmpty()) {
-                val readResult = api.post(
+                api.post(
                     "${LmsApi.BASE_URL}/ajax/st/lesson/lessonData/read",
                     mapOf(
                         "lesson_attach_seq" to file.attachSeq,
@@ -137,46 +138,24 @@ class TimetableRepository @Inject constructor(
                 )
             }
 
-            // 2. 파일 다운로드
-            val request = Request.Builder()
-                .url(file.downloadUrl)
-                .header("Referer", LmsApi.BASE_URL)
-                .header("User-Agent",
+            // 2. DownloadManager로 다운로드 요청
+            val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+            val request = DownloadManager.Request(Uri.parse(file.downloadUrl)).apply {
+                addRequestHeader("Referer", LmsApi.BASE_URL)
+                addRequestHeader("Cookie", cookieStore.rawCookies)
+                addRequestHeader("User-Agent",
                     "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 " +
                     "(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
-                .build()
-
-            val response = httpClient.newCall(request).execute()
-            if (!response.isSuccessful) {
-                return@withContext Result.failure(Exception("HTTP ${response.code}"))
+                setTitle(file.fileName)
+                setDescription("MLMS 파일 다운로드")
+                setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, file.fileName)
             }
 
-            val body = response.body ?: return@withContext Result.failure(Exception("빈 응답"))
+            val downloadId = dm.enqueue(request)
+            Log.d(TAG, "Download enqueued: id=$downloadId, file=${file.fileName}")
 
-            // 3. MediaStore로 Downloads 폴더에 저장
-            val mimeType = response.header("Content-Type") ?: "application/octet-stream"
-            val contentValues = ContentValues().apply {
-                put(MediaStore.Downloads.DISPLAY_NAME, file.fileName)
-                put(MediaStore.Downloads.MIME_TYPE, mimeType.substringBefore(";"))
-                put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
-                put(MediaStore.Downloads.IS_PENDING, 1)
-            }
-
-            val resolver = context.contentResolver
-            val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
-                ?: return@withContext Result.failure(Exception("MediaStore insert 실패"))
-
-            resolver.openOutputStream(uri)?.use { output ->
-                body.byteStream().use { input ->
-                    input.copyTo(output)
-                }
-            }
-
-            contentValues.clear()
-            contentValues.put(MediaStore.Downloads.IS_PENDING, 0)
-            resolver.update(uri, contentValues, null, null)
-
-            Result.success(uri)
+            Result.success(downloadId)
         } catch (e: kotlin.coroutines.cancellation.CancellationException) {
             throw e
         } catch (e: Exception) {
