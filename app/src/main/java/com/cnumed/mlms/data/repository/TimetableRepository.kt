@@ -14,6 +14,7 @@ import com.cnumed.mlms.data.remote.TimetableWebLoader
 import com.cnumed.mlms.domain.model.ClassItem
 import com.cnumed.mlms.domain.model.LessonDetail
 import com.cnumed.mlms.domain.model.LessonFile
+import com.cnumed.mlms.widget.TimetableWidgetUpdateWorker
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -88,11 +89,12 @@ class TimetableRepository @Inject constructor(
                 return Result.success(emptyList())
             }
 
-            // 주차별 그룹핑 → DB에 일괄 저장
+            // 주차별 그룹핑 → DB + 위젯 SharedPreferences에 일괄 저장
             val byWeek = allClasses.groupBy { it.weekStart }
             for ((week, classes) in byWeek) {
                 classDao.deleteByWeek(week.toString())
                 classDao.insertAll(classes.map { ClassEntity.fromDomain(it) })
+                TimetableWidgetUpdateWorker.saveClassesToCache(context, week, classes)
             }
 
             // 캐시 범위 갱신: 이벤트가 존재하는 최소~최대 주차
