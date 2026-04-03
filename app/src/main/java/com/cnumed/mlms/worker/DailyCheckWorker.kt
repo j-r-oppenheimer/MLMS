@@ -50,14 +50,16 @@ class DailyCheckWorker @AssistedInject constructor(
         val result = timetableRepository.fetchWeek(weekStart)
         if (result.isSuccess) {
             val newClasses = result.getOrDefault(emptyList())
-            // 위젯 캐시 + 화면 갱신 (변경 여부 무관)
-            TimetableWidgetUpdateWorker.saveClassesToCache(applicationContext, weekStart, newClasses)
-            val awm = AppWidgetManager.getInstance(applicationContext)
-            val ids = awm.getAppWidgetIds(ComponentName(applicationContext, TimetableWidget::class.java))
-            for (id in ids) TimetableWidget.updateWidget(applicationContext, awm, id)
+            // 빈 결과는 캐시에 쓰지 않음 — 로드 실패/세션 만료 시 기존 시간표 보존
+            if (newClasses.isNotEmpty()) {
+                TimetableWidgetUpdateWorker.saveClassesToCache(applicationContext, weekStart, newClasses)
+                val awm = AppWidgetManager.getInstance(applicationContext)
+                val ids = awm.getAppWidgetIds(ComponentName(applicationContext, TimetableWidget::class.java))
+                for (id in ids) TimetableWidget.updateWidget(applicationContext, awm, id)
 
-            if (newClasses.isNotEmpty() && hasChanges(oldClasses, newClasses)) {
-                sendTimetableNotification(oldClasses, newClasses)
+                if (hasChanges(oldClasses, newClasses)) {
+                    sendTimetableNotification(oldClasses, newClasses)
+                }
             }
         }
     }

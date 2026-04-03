@@ -55,10 +55,13 @@ class TimetableWidgetUpdateWorker @AssistedInject constructor(
             val result = repository.fetchWeek(weekStart)
             if (result.isSuccess) {
                 val classes = result.getOrDefault(emptyList())
-                val prefs = applicationContext.getSharedPreferences(
-                    TimetableWidget.PREFS_WIDGET, Context.MODE_PRIVATE
-                )
-                saveWeekJson(prefs, weekStart, classes)
+                // 빈 결과는 캐시에 쓰지 않음 — 로드 실패/세션 만료 시 기존 시간표 보존
+                if (classes.isNotEmpty()) {
+                    val prefs = applicationContext.getSharedPreferences(
+                        TimetableWidget.PREFS_WIDGET, Context.MODE_PRIVATE
+                    )
+                    saveWeekJson(prefs, weekStart, classes)
+                }
             }
 
             // 위젯 갱신
