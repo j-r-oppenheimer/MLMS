@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 위젯 선택 화면(API 31+) 전용 미리보기. 실제 위젯 모양을 흉내낸 정적 카드. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:background="@drawable/widget_countdown_card"
+    android:padding="10dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="다음 시험"
+        android:textSize="11sp"
+        android:textColor="#7787A1"
+        android:textStyle="bold" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="병리학 시험"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:gravity="center"
+        android:textColor="#333333" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:text="7/10 (목) · 3일 후"
+        android:textSize="11sp"
+        android:textColor="#888888" />
+
+</LinearLayout>

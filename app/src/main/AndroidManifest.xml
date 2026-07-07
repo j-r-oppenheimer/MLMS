@@ -39,11 +39,13 @@
 
         <receiver
             android:name=".widget.TimetableWidget"
+            android:label="@string/widget_timetable_name"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
                 <action android:name="com.cnumed.mlms.WIDGET_PREV_WEEK" />
                 <action android:name="com.cnumed.mlms.WIDGET_NEXT_WEEK" />
+                <action android:name="com.cnumed.mlms.WIDGET_NOOP" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
@@ -52,6 +54,42 @@
 
         <activity
             android:name=".widget.TimetableWidgetConfigActivity"
+            android:exported="true"
+            android:theme="@style/Theme.MLMS.NoActionBar">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE" />
+            </intent-filter>
+        </activity>
+
+        <!-- 다음 시험 위젯 -->
+        <receiver
+            android:name=".widget.NextExamWidget"
+            android:label="@string/widget_next_exam_name"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/next_exam_widget_info" />
+        </receiver>
+
+        <!-- 종강 D- 위젯 -->
+        <receiver
+            android:name=".widget.SemesterEndWidget"
+            android:label="@string/widget_semester_end_name"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/semester_end_widget_info" />
+        </receiver>
+
+        <!-- 카운트다운 위젯(다음 시험 / 종강) 공용 설정 -->
+        <activity
+            android:name=".widget.CountdownWidgetConfigActivity"
             android:exported="true"
             android:theme="@style/Theme.MLMS.NoActionBar">
             <intent-filter>

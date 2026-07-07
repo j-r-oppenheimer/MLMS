@@ -106,10 +106,18 @@
                 android:maxLength="7" />
 
             <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_pick_color"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="선택" />
+
+            <com.google.android.material.button.MaterialButton
                 android:id="@+id/btn_apply_color"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="12dp"
+                android:layout_marginStart="8dp"
                 android:text="적용" />
         </LinearLayout>
 

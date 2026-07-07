@@ -69,6 +69,9 @@ class TimetableWidgetUpdateWorker @AssistedInject constructor(
             val ids = awm.getAppWidgetIds(ComponentName(applicationContext, TimetableWidget::class.java))
             for (id in ids) TimetableWidget.updateWidget(applicationContext, awm, id)
 
+            // 다음 시험 / 종강 카운트다운 위젯도 새 캐시로 갱신
+            CountdownWidget.refreshAll(applicationContext)
+
             // 정기 업무인 경우만 다음 스케줄 등록
             if (weekStartStr == null) schedule(applicationContext)
             Result.success()

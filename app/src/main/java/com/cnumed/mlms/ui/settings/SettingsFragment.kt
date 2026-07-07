@@ -111,6 +111,21 @@ class SettingsFragment : Fragment() {
             }
         }
 
+        binding.btnPickColor.setOnClickListener {
+            val cur = try {
+                val t = binding.etColorHex.text.toString().trim().let { if (it.startsWith("#")) it else "#$it" }
+                Color.parseColor(t)
+            } catch (e: Exception) { Color.parseColor("#7787A1") }
+
+            com.cnumed.mlms.ui.settings.color.ColorPickerDialog.show(requireContext(), cur) { picked ->
+                val hex = String.format("#%06X", 0xFFFFFF and picked)
+                binding.etColorHex.setText(hex)
+                classPrefs.edit().putString("block_color", hex).apply()
+                Toast.makeText(requireContext(), "색상이 적용되었습니다.", Toast.LENGTH_SHORT).show()
+                updateWidget()
+            }
+        }
+
         binding.tvAppVersion.text = "MLMS v1.0 — 충남대 의대 학습관리시스템"
 
         binding.btnLogout.setOnClickListener {
@@ -131,6 +146,7 @@ class SettingsFragment : Fragment() {
         for (id in ids) {
             TimetableWidget.updateWidget(context, appWidgetManager, id)
         }
+        com.cnumed.mlms.widget.CountdownWidget.refreshAll(context)
     }
 
     private fun formatAlarmTime(hour: Int, minute: Int): String {

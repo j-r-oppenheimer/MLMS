@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 카운트다운 위젯 루트.
+     One UI 배경 블러를 받으려면 루트가 @android:id/background 이고 반투명 배경(알파 1~254)
+     이어야 한다. 배경색(틴트)은 런타임에 setBackgroundColor로 채운다. 런처가 그 뒤 배경화면을
+     블러해 이 반투명 색으로 틴트한 결과를 깔아준다. 내용(글씨)은 위 ImageView 비트맵(투명 배경). -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@android:id/background"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#66FFFFFF">
+
+    <ImageView
+        android:id="@+id/countdown_image"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="fitXY"
+        android:contentDescription="@null" />
+
+</FrameLayout>

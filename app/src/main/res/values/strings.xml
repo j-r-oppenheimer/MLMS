@@ -4,4 +4,9 @@
     <string name="tab_timetable">시간표</string>
     <string name="tab_notice">공지사항</string>
     <string name="tab_settings">설정</string>
+    <string name="widget_next_exam_desc">다음 시험 과목</string>
+    <string name="widget_semester_end_desc">종강까지 D-day</string>
+    <string name="widget_timetable_name">시간표</string>
+    <string name="widget_next_exam_name">다음 시험</string>
+    <string name="widget_semester_end_name">종강 D-day</string>
 </resources>

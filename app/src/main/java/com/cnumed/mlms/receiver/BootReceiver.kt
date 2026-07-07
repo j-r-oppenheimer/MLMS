@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import com.cnumed.mlms.widget.TimetableWidgetUpdateWorker
 import com.cnumed.mlms.worker.DailyAlarmScheduler
+import com.cnumed.mlms.worker.DailyCheckWorker
 
 /** 재부팅 후 스케줄링 복원 */
 class BootReceiver : BroadcastReceiver() {
@@ -12,6 +13,7 @@ class BootReceiver : BroadcastReceiver() {
         if (intent.action == Intent.ACTION_BOOT_COMPLETED) {
             TimetableWidgetUpdateWorker.schedule(context)
             DailyAlarmScheduler.schedule(context)
+            DailyCheckWorker.schedulePeriodic(context)
         }
     }
 }

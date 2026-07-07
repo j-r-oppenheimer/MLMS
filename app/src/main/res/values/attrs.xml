@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  삼성 One UI 위젯 커스텀 속성 선언.
+  appwidget-provider XML에서 app:widgetStyle / app:widgetSize 를 쓰려면 컴파일 시점에
+  이 속성들이 선언돼 있어야 한다(값은 One UI 런처가 읽어 네이티브 곡률·배경 블러를 적용).
+  참고: github.com/thatjoshguy67/blur-widget-demo
+-->
+<resources>
+    <!-- 배경 블러에 필요한 스타일 플래그 -->
+    <attr name="widgetStyle" format="integer">
+        <flag name="colorful" value="0x1" />
+        <flag name="monotone" value="0x2" />
+    </attr>
+
+    <!-- One UI 위젯 피커 통합용 크기 플래그 -->
+    <attr name="widgetSize" format="integer">
+        <flag name="tiny" value="0x1" />
+        <flag name="small" value="0x2" />
+        <flag name="wideSmall" value="0x4" />
+        <flag name="medium" value="0x8" />
+        <flag name="large" value="0x10" />
+        <flag name="extraLarge" value="0x20" />
+        <flag name="extraLargeLong" value="0x40" />
+    </attr>
+</resources>

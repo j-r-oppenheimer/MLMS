@@ -57,7 +57,15 @@ class TimetableWidget : AppWidgetProvider() {
 
         const val ACTION_PREV_WEEK = "com.cnumed.mlms.WIDGET_PREV_WEEK"
         const val ACTION_NEXT_WEEK = "com.cnumed.mlms.WIDGET_NEXT_WEEK"
+        // 핸들러 없는 영역 탭 시 런처가 앱을 여는 기본 동작(One UI 8.5 등)을 막기 위한 무동작 인텐트
+        const val ACTION_NOOP      = "com.cnumed.mlms.WIDGET_NOOP"
         const val PREFS_WIDGET     = "widget_cache"
+
+        // 글씨 크기 감쇠: SIZE_DAMP<1 이면 위젯 크기 변화에 덜 민감. pivot 부근은 기존과 동일.
+        // pivot은 이 위젯의 기본 크기(4×4, ref≈260dp)에 맞춰 기본 크기에선 원래 크기 유지.
+        private const val SIZE_DAMP = 0.55
+        private const val SIZE_PIVOT_DP = 260f
+
         const val KEY_WEEK_OFFSET  = "widget_week_offset"
         const val KEY_BG_ALPHA     = "widget_bg_alpha"
         const val KEY_BLOCK_ALPHA  = "widget_block_alpha"
@@ -126,9 +134,9 @@ class TimetableWidget : AppWidgetProvider() {
             // emptyList or classes with data = 캐시 있음 → 시간표 그리기 (빈 주도 그림)
             val isLoading = (classes == null)
             val bitmap = if (isLoading) {
-                drawLoadingBitmap(w, h, weekStart, isDarkMode, bgAlpha)
+                drawLoadingBitmap(w, h, density, weekStart, isDarkMode, bgAlpha)
             } else {
-                drawTimetable(w, h, weekStart, filteredClasses, isDarkMode, bgAlpha, textSize, customColorHex, blockAlpha, examHighlight)
+                drawTimetable(w, h, density, weekStart, filteredClasses, isDarkMode, bgAlpha, textSize, customColorHex, blockAlpha, examHighlight)
             }
 
             val prevPi = android.app.PendingIntent.getBroadcast(
@@ -139,16 +147,28 @@ class TimetableWidget : AppWidgetProvider() {
                 context, 2, Intent(ACTION_NEXT_WEEK).setPackage(context.packageName),
                 android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
             )
+            // 루트 전체에 무동작 클릭을 깔아 본문 탭으로 앱이 열리는 것을 방지한다.
+            // 자식 뷰(prev/next)는 자기 영역에서 우선하므로 주 이동 버튼은 그대로 동작한다.
+            val noopPi = android.app.PendingIntent.getBroadcast(
+                context, 3, Intent(ACTION_NOOP).setPackage(context.packageName),
+                android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+            )
+
+            // 카드 배경색(틴트)은 비트맵이 아니라 @android:id/background 뷰에 올린다.
+            // One UI가 이 반투명 색 뒤 배경화면을 블러해 깔아주고, 모서리 곡률도 담당한다.
+            // 알파는 블러 조건상 1~254로 클램프.
+            val cardBase = if (isDarkMode) Color.rgb(0, 0, 0) else Color.WHITE
+            val tint = Color.argb(
+                bgAlpha.coerceIn(1, 254),
+                Color.red(cardBase), Color.green(cardBase), Color.blue(cardBase)
+            )
 
             val views = RemoteViews(context.packageName, R.layout.widget_timetable).apply {
                 setImageViewBitmap(R.id.widget_image, bitmap)
+                setInt(android.R.id.background, "setBackgroundColor", tint)
+                setOnClickPendingIntent(android.R.id.background, noopPi)
                 setOnClickPendingIntent(R.id.widget_btn_prev, prevPi)
                 setOnClickPendingIntent(R.id.widget_btn_next, nextPi)
-                if (bgAlpha >= 255 && !isDarkMode) {
-                    setInt(R.id.widget_root, "setBackgroundResource", R.drawable.widget_background)
-                } else {
-                    setInt(R.id.widget_root, "setBackgroundColor", Color.TRANSPARENT)
-                }
             }
             manager.updateAppWidget(widgetId, views)
 
@@ -215,12 +235,16 @@ class TimetableWidget : AppWidgetProvider() {
                     val gap  = if (totalLanes > 1) 1f else 0f
                     val slotW = (colW - 2f - gap * (totalLanes - 1)) / totalLanes
                     val x  = colX + 1f + lane * (slotW + gap)
+                    // 맨 오른쪽 열(금)의 가장 오른쪽 블록은 위젯 우측 끝까지 붙인다.
+                    // (안 그러면 블록 오른쪽 1px 여백에 반투명 배경화면이 비쳐 세로선처럼 보인다)
+                    val right = if (col == 4 && lane == totalLanes - 1) colX + colW else x + slotW
+                    val bw = right - x
                     val s  = ceilTo30Min(cls.startTime.hour, cls.startTime.minute) - startH * 60
                     val e  = ceilTo30Min(cls.endTime.hour, cls.endTime.minute) - startH * 60
                     val y1 = headerH + s / 60f * hourH
                     val y2 = headerH + e.coerceAtMost(totalH * 60) / 60f * hourH
                     val bh = (y2 - y1 - 1f).coerceAtLeast(0f)
-                    if (bh >= 3f) result[cls] = WidgetBlockLayout(x, slotW.coerceAtLeast(2f), y1, bh)
+                    if (bh >= 3f) result[cls] = WidgetBlockLayout(x, bw.coerceAtLeast(2f), y1, bh)
                 }
             }
             return result
@@ -248,31 +272,30 @@ class TimetableWidget : AppWidgetProvider() {
         private fun drawLoadingBitmap(
             width: Int,
             height: Int,
+            density: Float,
             weekStart: LocalDate,
             isDarkMode: Boolean,
             bgAlpha: Int
         ): Bitmap {
+            // 투명 배경 — 카드 틴트/블러/곡률은 @android:id/background 뷰 + 런처가 담당.
             val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bitmap)
-            val bgR = if (isDarkMode) 0 else 255
-            val bgG = if (isDarkMode) 0 else 255
-            val bgB = if (isDarkMode) 0 else 255
-            canvas.drawRect(
-                0f, 0f, width.toFloat(), height.toFloat(),
-                Paint().apply { color = Color.argb(bgAlpha, bgR, bgG, bgB) }
-            )
+            // drawTimetable과 동일하게 √(w*h) 기준으로 글씨 크기를 잡아 회전 시 안정화한다.
+            val rawRef = kotlin.math.sqrt(width.toFloat() * height.toFloat())
+            val pivot = SIZE_PIVOT_DP * density
+            val ref = pivot * Math.pow((rawRef / pivot).toDouble(), SIZE_DAMP).toFloat()
             val textColor = if (isDarkMode) Color.parseColor("#AAAAAA") else Color.parseColor("#666666")
             val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = textColor
                 textAlign = Paint.Align.CENTER
-                textSize = height * 0.035f
+                textSize = ref * 0.0277f
             }
             canvas.drawText("시간표 불러오는 중…", width / 2f, height / 2f, textPaint)
             val subPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = textColor
                 alpha = 160
                 textAlign = Paint.Align.CENTER
-                textSize = height * 0.025f
+                textSize = ref * 0.0198f
             }
             val monday = weekStart.plusDays(1)
             val sunday = weekStart.plusDays(7)
@@ -294,6 +317,7 @@ class TimetableWidget : AppWidgetProvider() {
         private fun drawTimetable(
             width: Int,
             height: Int,
+            density: Float,
             weekStart: LocalDate,
             classes: List<WidgetClass>,
             isDarkMode: Boolean,
@@ -312,10 +336,6 @@ class TimetableWidget : AppWidgetProvider() {
             } catch (e: Exception) {
                 Color.parseColor("#8D9DB6")
             }
-
-            val bgR = if (isDarkMode) 0 else 255
-            val bgG = if (isDarkMode) 0 else 255
-            val bgB = if (isDarkMode) 0 else 255
 
             val highlightAlpha = if (isDarkMode) 40 else 25
             val todayColColor = Color.argb(
@@ -336,10 +356,17 @@ class TimetableWidget : AppWidgetProvider() {
             val totalH   = endH - startH
             val hourH    = (height - headerH) / totalH
 
-            val textSm = height * 0.027f * (textSizeScale.toFloat() / 100f)
-            val textXs = height * 0.028f * (textSizeScale.toFloat() / 100f)
+            // 글씨 크기는 높이만이 아니라 가로·세로의 기하평균에 비례시킨다.
+            // 높이에만 비례시키면 태블릿을 세로로 돌릴 때 위젯 높이는 커지고 열 폭은
+            // 좁아져서 글씨가 과도하게 커진다. √(w*h)는 회전해도 거의 일정해 안정적이다.
+            // 위젯 크기 변화에 덜 민감하도록 ref를 감쇠(pivot 기준 지수<1)시킨다.
+            // 감쇠가 커지는 속도를 이미 잡아주므로 별도 절대 상한은 두지 않는다.
+            val rawRef = kotlin.math.sqrt(width.toFloat() * height.toFloat())
+            val pivot = SIZE_PIVOT_DP * density
+            val ref = pivot * Math.pow((rawRef / pivot).toDouble(), SIZE_DAMP).toFloat()
+            val textSm = ref * 0.0310f * (textSizeScale.toFloat() / 100f)
+            val textXs = ref * 0.0320f * (textSizeScale.toFloat() / 100f)
 
-            val bgPaint      = Paint().apply { color = Color.argb(bgAlpha, bgR, bgG, bgB) }
             val todayColPaint = Paint().apply { color = todayColColor; style = Paint.Style.FILL }
             val gridPaint     = Paint().apply { color = gridColor; strokeWidth = 0.8f }
 
@@ -357,8 +384,6 @@ class TimetableWidget : AppWidgetProvider() {
             val blockTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = Color.WHITE; textSize = textXs; isFakeBoldText = true
             }
-
-            canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), bgPaint)
 
             val weekEnd = weekStart.plusDays(6)
             if (today >= weekStart && today <= weekEnd) {
@@ -383,10 +408,12 @@ class TimetableWidget : AppWidgetProvider() {
                 }
             }
 
-            for (i in 0..5) {
+            // 맨 바깥 세로선(i=5, 오른쪽 끝)·가로선(h=totalH, 아래 끝)은 그리지 않는다.
+            // 라운딩된 모서리를 따라가지 못하고 가장자리에 직선 테두리처럼 남기 때문.
+            for (i in 0..4) {
                 canvas.drawLine(timeColW + i * colW, headerH, timeColW + i * colW, height.toFloat(), gridPaint)
             }
-            for (h in 0..totalH) {
+            for (h in 0 until totalH) {
                 val y = headerH + h * hourH
                 canvas.drawLine(timeColW, y, width.toFloat(), y, gridPaint)
             }

@@ -1,12 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- RelativeLayout: 이미지 위에 prev/next 투명 클릭 영역 오버레이 -->
+<!-- One UI 배경 블러용: 루트가 @android:id/background 이고 반투명 배경(런타임에 틴트).
+     이미지(그리드·블록·글씨, 투명 배경) 위에 prev/next 투명 클릭 영역을 올린다. -->
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/widget_root"
+    android:id="@android:id/background"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/widget_background">
+    android:background="#66FFFFFF">
 
-    <!-- 시간표 비트맵 (배경·헤더·그리드·블록 전부 포함) -->
+    <!-- 시간표 비트맵 (그리드·블록·글씨, 투명 배경) -->
     <ImageView
         android:id="@+id/widget_image"
         android:layout_width="match_parent"

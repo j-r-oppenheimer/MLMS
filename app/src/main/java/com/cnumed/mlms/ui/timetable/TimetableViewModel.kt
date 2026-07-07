@@ -112,6 +112,7 @@ class TimetableViewModel @Inject constructor(
         val awm = AppWidgetManager.getInstance(context)
         val ids = awm.getAppWidgetIds(ComponentName(context, TimetableWidget::class.java))
         for (id in ids) TimetableWidget.updateWidget(context, awm, id)
+        com.cnumed.mlms.widget.CountdownWidget.refreshAll(context)
     }
 
     /** 설정(반 선택 등) 변경 후 재방문 시 DB 재조회 없이 필터만 재적용 */

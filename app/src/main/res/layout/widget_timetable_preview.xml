@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 위젯 선택 화면(API 31+) 전용 미리보기 레이아웃.
+     실제 위젯(widget_timetable)은 런타임에 비트맵을 채우기 전까지 비어 있어
+     선택 화면에서 흰 박스로 보이므로, 정적 시간표 이미지를 보여주는 별도 레이아웃을 둔다. -->
+<ImageView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:scaleType="fitXY"
+    android:src="@drawable/widget_preview" />

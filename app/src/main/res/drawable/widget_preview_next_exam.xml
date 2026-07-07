@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 위젯 선택 화면용 미리보기(previewImage, API 30 이하 폴백).
+     둥근 카드 + 상단 라벨 + 큰 이름 바 2줄 + 하단 날짜 바로 실제 레이아웃을 암시. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="110dp"
+    android:height="110dp"
+    android:viewportWidth="110"
+    android:viewportHeight="110">
+
+    <!-- 흰 카드 (둥근 모서리) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:strokeColor="#22000000"
+        android:strokeWidth="1"
+        android:pathData="M18,4 L92,4 A14,14 0 0 1 106,18 L106,92 A14,14 0 0 1 92,106 L18,106 A14,14 0 0 1 4,92 L4,18 A14,14 0 0 1 18,4 Z" />
+
+    <!-- 상단 라벨 (다음 시험, 강조색) -->
+    <path android:fillColor="#7787A1" android:pathData="M40,28 h30 v6 h-30 z" />
+
+    <!-- 큰 이름 바 2줄 (강조) -->
+    <path android:fillColor="#3A3A3A" android:pathData="M28,46 h54 v9 h-54 z" />
+    <path android:fillColor="#3A3A3A" android:pathData="M38,60 h34 v9 h-34 z" />
+
+    <!-- 하단 날짜 바 -->
+    <path android:fillColor="#C8C8C8" android:pathData="M34,78 h42 v6 h-42 z" />
+</vector>

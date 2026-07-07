@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 위젯 선택 화면용 미리보기. 실제 시간표 모양을 흉내낸 정적 이미지. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="270dp"
+    android:height="250dp"
+    android:viewportWidth="270"
+    android:viewportHeight="250">
+
+    <!-- 흰 배경 (둥근 모서리) -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M12,0 L258,0 A12,12 0 0 1 270,12 L270,238 A12,12 0 0 1 258,250 L12,250 A12,12 0 0 1 0,238 L0,12 A12,12 0 0 1 12,0 Z" />
+
+    <!-- 세로 그리드 라인 (시간 열 + 5개 요일 열) -->
+    <group>
+        <path android:strokeColor="#E0E0E0" android:strokeWidth="0.8" android:pathData="M18,18 L18,250" />
+        <path android:strokeColor="#E0E0E0" android:strokeWidth="0.8" android:pathData="M68,18 L68,250" />
+        <path android:strokeColor="#E0E0E0" android:strokeWidth="0.8" android:pathData="M119,18 L119,250" />
+        <path android:strokeColor="#E0E0E0" android:strokeWidth="0.8" android:pathData="M169,18 L169,250" />
+        <path android:strokeColor="#E0E0E0" android:strokeWidth="0.8" android:pathData="M219,18 L219,250" />
+    </group>
+
+    <!-- 가로 그리드 라인 (시간 단위) -->
+    <group>
+        <path android:strokeColor="#E0E0E0" android:strokeWidth="0.8" android:pathData="M18,18 L270,18" />
+        <path android:strokeColor="#EEEEEE" android:strokeWidth="0.8" android:pathData="M18,44 L270,44" />
+        <path android:strokeColor="#EEEEEE" android:strokeWidth="0.8" android:pathData="M18,70 L270,70" />
+        <path android:strokeColor="#EEEEEE" android:strokeWidth="0.8" android:pathData="M18,95 L270,95" />
+        <path android:strokeColor="#EEEEEE" android:strokeWidth="0.8" android:pathData="M18,121 L270,121" />
+        <path android:strokeColor="#EEEEEE" android:strokeWidth="0.8" android:pathData="M18,147 L270,147" />
+        <path android:strokeColor="#EEEEEE" android:strokeWidth="0.8" android:pathData="M18,173 L270,173" />
+        <path android:strokeColor="#EEEEEE" android:strokeWidth="0.8" android:pathData="M18,198 L270,198" />
+        <path android:strokeColor="#EEEEEE" android:strokeWidth="0.8" android:pathData="M18,224 L270,224" />
+    </group>
+
+    <!-- 요일 헤더 표시 (월·화·수·목·금 자리에 옅은 막대) -->
+    <group>
+        <path android:fillColor="#C7CFDB" android:pathData="M36,7 h14 v4 h-14 z" />
+        <path android:fillColor="#C7CFDB" android:pathData="M86,7 h14 v4 h-14 z" />
+        <path android:fillColor="#C7CFDB" android:pathData="M137,7 h14 v4 h-14 z" />
+        <path android:fillColor="#C7CFDB" android:pathData="M187,7 h14 v4 h-14 z" />
+        <path android:fillColor="#C7CFDB" android:pathData="M237,7 h14 v4 h-14 z" />
+    </group>
+
+    <!-- 수업 블록들 (앱 기본 블록색 #8D9DB6) -->
+    <!-- 월 9~11시 -->
+    <path android:fillColor="#8D9DB6" android:pathData="M21,21 L65,21 A3,3 0 0 1 68,24 L68,66 A3,3 0 0 1 65,69 L21,69 A3,3 0 0 1 18,66 L18,24 A3,3 0 0 1 21,21 Z" />
+    <!-- 화 10~12시 -->
+    <path android:fillColor="#8D9DB6" android:pathData="M71,47 L115,47 A3,3 0 0 1 118,50 L118,92 A3,3 0 0 1 115,95 L71,95 A3,3 0 0 1 68,92 L68,50 A3,3 0 0 1 71,47 Z" />
+    <!-- 수 13~15시 -->
+    <path android:fillColor="#8D9DB6" android:pathData="M122,124 L166,124 A3,3 0 0 1 169,127 L169,169 A3,3 0 0 1 166,172 L122,172 A3,3 0 0 1 119,169 L119,127 A3,3 0 0 1 122,124 Z" />
+    <!-- 목 11~13시 (시험 강조색 #7A8AA3) -->
+    <path android:fillColor="#7A8AA3" android:pathData="M172,72 L216,72 A3,3 0 0 1 219,75 L219,117 A3,3 0 0 1 216,120 L172,120 A3,3 0 0 1 169,117 L169,75 A3,3 0 0 1 172,72 Z" />
+    <!-- 금 14~16시 -->
+    <path android:fillColor="#8D9DB6" android:pathData="M222,150 L266,150 A3,3 0 0 1 269,153 L269,195 A3,3 0 0 1 266,198 L222,198 A3,3 0 0 1 219,195 L219,153 A3,3 0 0 1 222,150 Z" />
+</vector>

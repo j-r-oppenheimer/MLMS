@@ -47,6 +47,9 @@ class DailyCheckWorker @AssistedInject constructor(
         // fetch 전 DB 스냅샷
         val oldClasses = timetableRepository.getClassesForWeek(weekStart).first()
 
+        // 캐시 무효화 — 프로세스가 살아있을 때 in-memory 캐시로 인해 네트워크 fetch가
+        // 생략되면 변경을 영영 감지하지 못하므로, 백그라운드 체크는 항상 새로 가져온다.
+        timetableRepository.invalidateCache()
         val result = timetableRepository.fetchWeek(weekStart)
         if (result.isSuccess) {
             val newClasses = result.getOrDefault(emptyList())
@@ -56,6 +59,7 @@ class DailyCheckWorker @AssistedInject constructor(
                 val awm = AppWidgetManager.getInstance(applicationContext)
                 val ids = awm.getAppWidgetIds(ComponentName(applicationContext, TimetableWidget::class.java))
                 for (id in ids) TimetableWidget.updateWidget(applicationContext, awm, id)
+                com.cnumed.mlms.widget.CountdownWidget.refreshAll(applicationContext)
 
                 if (hasChanges(oldClasses, newClasses)) {
                     sendTimetableNotification(oldClasses, newClasses)
@@ -105,7 +109,8 @@ class DailyCheckWorker @AssistedInject constructor(
     private fun notify(id: Int, channel: String, title: String, body: String) {
         val nm = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val notification = NotificationCompat.Builder(applicationContext, channel)
-            .setSmallIcon(com.cnumed.mlms.R.drawable.ic_launcher_foreground)
+            .setSmallIcon(com.cnumed.mlms.R.drawable.ic_notification)
+            .setColor(0xFF7787A1.toInt())
             .setContentTitle(title)
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
@@ -130,10 +135,33 @@ class DailyCheckWorker @AssistedInject constructor(
     companion object {
         private const val TAG = "DailyCheckWorker"
         const val WORK_NAME = "daily_check"
+        const val PERIODIC_WORK_NAME = "periodic_check"
 
         private const val CHANNEL_TIMETABLE    = "timetable_change"
         private const val CHANNEL_NOTICE       = "new_notice"
         private const val NOTIF_ID_TIMETABLE   = 1001
         private const val NOTIF_ID_NOTICE_BASE = 2000
+
+        /**
+         * 앱 실행 여부와 무관하게 주기적으로 시간표/공지 변경을 체크한다.
+         * 단발 AlarmManager 알람(DailyAlarmScheduler)은 Doze·제조사 배터리 최적화로
+         * 누락되면 다음 재스케줄까지 끊기므로, WorkManager 주기 작업으로 보강한다.
+         * WorkManager는 재부팅 후에도 자동 복원된다.
+         */
+        fun schedulePeriodic(context: Context) {
+            val request = PeriodicWorkRequestBuilder<DailyCheckWorker>(3, java.util.concurrent.TimeUnit.HOURS)
+                .setConstraints(
+                    Constraints.Builder()
+                        .setRequiredNetworkType(NetworkType.CONNECTED)
+                        .build()
+                )
+                .build()
+
+            WorkManager.getInstance(context).enqueueUniquePeriodicWork(
+                PERIODIC_WORK_NAME,
+                ExistingPeriodicWorkPolicy.KEEP,
+                request
+            )
+        }
     }
 }
