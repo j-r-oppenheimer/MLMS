@@ -241,9 +241,12 @@ class TimetableWidget : AppWidgetProvider() {
                     val bw = right - x
                     val s  = ceilTo30Min(cls.startTime.hour, cls.startTime.minute) - startH * 60
                     val e  = ceilTo30Min(cls.endTime.hour, cls.endTime.minute) - startH * 60
+                    val eCapped = e.coerceAtMost(totalH * 60)
                     val y1 = headerH + s / 60f * hourH
-                    val y2 = headerH + e.coerceAtMost(totalH * 60) / 60f * hourH
-                    val bh = (y2 - y1 - 1f).coerceAtLeast(0f)
+                    val y2 = headerH + eCapped / 60f * hourH
+                    // 맨 아래 교시까지 닿는 블록은 위젯 하단 끝까지 붙인다(우측과 동일한 이유).
+                    val bottomTrim = if (eCapped >= totalH * 60) 0f else 1f
+                    val bh = (y2 - y1 - bottomTrim).coerceAtLeast(0f)
                     if (bh >= 3f) result[cls] = WidgetBlockLayout(x, bw.coerceAtLeast(2f), y1, bh)
                 }
             }
