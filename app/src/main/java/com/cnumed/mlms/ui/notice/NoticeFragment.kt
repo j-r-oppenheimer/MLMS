@@ -14,6 +14,7 @@ import androidx.recyclerview.widget.DividerItemDecoration
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.cnumed.mlms.R
 import com.cnumed.mlms.databinding.FragmentNoticeBinding
+import com.cnumed.mlms.util.ThemeColorManager
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 
@@ -36,6 +37,8 @@ class NoticeFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        ThemeColorManager.tintHeader(binding.headerBar, binding.headerBar)
+        ThemeColorManager.applySpinnerColor(binding.swipeRefresh)
         setupRecyclerView()
         observeState()
         // SwipeRefresh는 명시적 새로고침이므로 forceRefresh 사용

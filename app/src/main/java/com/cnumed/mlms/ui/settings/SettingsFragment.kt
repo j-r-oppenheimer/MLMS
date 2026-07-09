@@ -17,6 +17,7 @@ import com.cnumed.mlms.data.remote.SessionManager
 import com.cnumed.mlms.databinding.FragmentSettingsBinding
 import com.cnumed.mlms.ui.login.LoginActivity
 import com.cnumed.mlms.util.SecurePrefs
+import com.cnumed.mlms.util.ThemeColorManager
 import com.cnumed.mlms.widget.TimetableWidget
 import com.cnumed.mlms.worker.DailyAlarmScheduler
 import dagger.hilt.android.AndroidEntryPoint
@@ -42,6 +43,8 @@ class SettingsFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+
+        applyThemeColor()
 
         binding.switchAutoLogin.isChecked = securePrefs.isAutoLoginEnabled()
         binding.switchAutoLogin.setOnCheckedChangeListener { _, checked ->
@@ -105,6 +108,7 @@ class SettingsFragment : Fragment() {
                 Color.parseColor(inputColor)
                 classPrefs.edit().putString("block_color", inputColor).apply()
                 Toast.makeText(requireContext(), "색상이 적용되었습니다.", Toast.LENGTH_SHORT).show()
+                onThemeColorChanged()
                 updateWidget()
             } catch (e: Exception) {
                 Toast.makeText(requireContext(), "올바른 색상 코드를 입력해주세요. (예: #7787A1)", Toast.LENGTH_SHORT).show()
@@ -122,6 +126,7 @@ class SettingsFragment : Fragment() {
                 binding.etColorHex.setText(hex)
                 classPrefs.edit().putString("block_color", hex).apply()
                 Toast.makeText(requireContext(), "색상이 적용되었습니다.", Toast.LENGTH_SHORT).show()
+                onThemeColorChanged()
                 updateWidget()
             }
         }
@@ -135,6 +140,26 @@ class SettingsFragment : Fragment() {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
             })
         }
+    }
+
+    /** 설정 화면의 컨트롤들을 현재 테마 색으로 틴팅한다. */
+    private fun applyThemeColor() {
+        val color = ThemeColorManager.getColor(requireContext())
+        ThemeColorManager.tintOutlinedButton(binding.btnAlarmTime, color)
+        ThemeColorManager.tintOutlinedButton(binding.btnPickColor, color)
+        ThemeColorManager.tintFilledButton(binding.btnApplyColor, color)
+        ThemeColorManager.tintOutlinedButton(binding.btnLogout, color)
+        ThemeColorManager.tintSwitch(binding.switchExamHighlight, color)
+        ThemeColorManager.tintSwitch(binding.switchAutoLogin, color)
+        ThemeColorManager.tintCompoundButton(binding.radioClassAll, color)
+        ThemeColorManager.tintCompoundButton(binding.radioClassA, color)
+        ThemeColorManager.tintCompoundButton(binding.radioClassB, color)
+    }
+
+    /** 테마 색이 바뀐 뒤 화면 전체(설정 컨트롤 + 상태바 + 하단 네비)를 갱신한다. */
+    private fun onThemeColorChanged() {
+        applyThemeColor()
+        (activity as? com.cnumed.mlms.ui.main.MainActivity)?.applyThemeColors()
     }
 
     private fun updateWidget() {

@@ -8,6 +8,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import com.cnumed.mlms.databinding.ActivityLoginBinding
 import com.cnumed.mlms.ui.main.MainActivity
+import com.cnumed.mlms.util.ThemeColorManager
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 
@@ -26,6 +27,11 @@ class LoginActivity : AppCompatActivity() {
     }
 
     private fun setupUI() {
+        ThemeColorManager.applyStatusBar(this)
+        ThemeColorManager.tintFilledButton(binding.btnLogin)
+        ThemeColorManager.tintCompoundButton(binding.cbAutoLogin)
+        binding.tvAppTitle.setTextColor(ThemeColorManager.getColor(this))
+
         binding.btnLogin.setOnClickListener {
             val id   = binding.etId.text.toString().trim()
             val pwd  = binding.etPassword.text.toString()

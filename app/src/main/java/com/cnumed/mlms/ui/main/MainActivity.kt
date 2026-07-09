@@ -16,6 +16,7 @@ import androidx.navigation.ui.setupWithNavController
 import com.cnumed.mlms.R
 import com.cnumed.mlms.databinding.ActivityMainBinding
 import com.cnumed.mlms.ui.login.LoginActivity
+import com.cnumed.mlms.util.ThemeColorManager
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 
@@ -39,8 +40,21 @@ class MainActivity : AppCompatActivity() {
         val navController = navHostFragment.navController
         binding.bottomNav.setupWithNavController(navController)
 
+        applyThemeColors()
         requestNotificationPermission()
         observeLoginState()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // 설정에서 테마 색이 바뀐 뒤 돌아오면 즉시 반영
+        applyThemeColors()
+    }
+
+    /** 상태바·하단 네비게이션을 현재 테마 색으로 갱신한다. 설정 화면에서도 호출된다. */
+    fun applyThemeColors() {
+        ThemeColorManager.applyStatusBar(this)
+        ThemeColorManager.tintBottomNav(binding.bottomNav)
     }
 
     private fun requestNotificationPermission() {

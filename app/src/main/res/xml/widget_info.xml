@@ -5,8 +5,8 @@
     android:description="@string/app_name"
     android:initialLayout="@layout/widget_timetable"
     android:minHeight="250dp"
-    android:minResizeHeight="200dp"
-    android:minResizeWidth="220dp"
+    android:minResizeHeight="110dp"
+    android:minResizeWidth="110dp"
     android:minWidth="270dp"
     android:maxResizeHeight="800dp"
     android:maxResizeWidth="800dp"
@@ -19,4 +19,4 @@
     android:widgetCategory="home_screen"
     android:widgetFeatures="reconfigurable"
     app:widgetStyle="colorful"
-    app:widgetSize="small|wideSmall|medium|large|extraLarge|extraLargeLong" />
+    app:widgetSize="medium|large|extraLarge|extraLargeLong" />

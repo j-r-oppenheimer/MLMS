@@ -19,6 +19,7 @@ import com.cnumed.mlms.databinding.FragmentTimetableBinding
 import com.cnumed.mlms.domain.model.ClassItem
 import com.cnumed.mlms.domain.model.LessonFile
 import com.cnumed.mlms.util.DateUtils
+import com.cnumed.mlms.util.ThemeColorManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
@@ -41,6 +42,7 @@ class TimetableFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
+        applyThemeColor()
         setupNavigation()
         observeState()
         binding.swipeRefresh.setOnRefreshListener { viewModel.refresh() }
@@ -166,6 +168,14 @@ class TimetableFragment : Fragment() {
                 Toast.makeText(requireContext(), "다운로드 실패: ${result.exceptionOrNull()?.message}", Toast.LENGTH_SHORT).show()
             }
         }
+    }
+
+    private fun applyThemeColor() {
+        ThemeColorManager.tintHeader(
+            binding.headerBar,
+            binding.tvWeekRange, binding.btnPrevWeek, binding.btnNextWeek
+        )
+        ThemeColorManager.applySpinnerColor(binding.swipeRefresh)
     }
 
     private fun setupNavigation() {

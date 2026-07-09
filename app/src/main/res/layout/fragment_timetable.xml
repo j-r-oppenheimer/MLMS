@@ -6,6 +6,7 @@
 
     <!-- 주 네비게이션 헤더 -->
     <LinearLayout
+        android:id="@+id/header_bar"
         android:layout_width="match_parent"
         android:layout_height="48dp"
         android:background="@color/primary"
