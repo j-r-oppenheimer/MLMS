@@ -70,6 +70,9 @@ class TimetableRepository @Inject constructor(
                 Log.d(TAG, "Week $weekStart in cached range — using DB")
                 val cached = classDao.getClassesByWeekOnce(weekStart.toString())
                     .map { it.toDomain() }
+                // 캐시 범위 안이면 수업이 0개여도 '확인된 빈 주(방학)' — 위젯 캐시에도
+                // 빈 배열로 기록해 위젯이 로딩 상태로 남지 않게 한다.
+                TimetableWidgetUpdateWorker.saveClassesToCache(context, weekStart, cached)
                 return Result.success(cached)
             }
 
@@ -103,7 +106,14 @@ class TimetableRepository @Inject constructor(
             cachedRangeMax = weeks.last()
             Log.d(TAG, "Cached range: $cachedRangeMin ~ $cachedRangeMax (${byWeek.size} weeks)")
 
-            Result.success(byWeek[weekStart] ?: emptyList())
+            // 로드는 성공했으나 요청한 주에 수업이 없으면(방학) 빈 배열을 위젯 캐시에 기록.
+            // 위 byWeek 루프는 수업이 있는 주만 저장하므로, 빈 주는 여기서 명시적으로
+            // 기록하지 않으면 위젯 캐시 키가 생기지 않아 위젯이 무한 로딩된다.
+            val weekClasses = byWeek[weekStart] ?: emptyList()
+            if (weekClasses.isEmpty()) {
+                TimetableWidgetUpdateWorker.saveClassesToCache(context, weekStart, emptyList())
+            }
+            Result.success(weekClasses)
         } catch (e: Exception) {
             Log.e(TAG, "fetchWeek failed", e)
             Result.failure(e)
