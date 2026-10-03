@@ -1,5 +1,7 @@
 package com.cnumed.mlms.widget
 
+import com.cnumed.mlms.util.AppLog
+
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -76,7 +78,7 @@ class TimetableWidgetUpdateWorker @AssistedInject constructor(
             if (weekStartStr == null) schedule(applicationContext)
             Result.success()
         } catch (e: Exception) {
-            android.util.Log.e("WidgetUpdateWorker", "doWork failed", e)
+            AppLog.e("WidgetUpdateWorker", "doWork failed", e)
             Result.retry()
         }
     }

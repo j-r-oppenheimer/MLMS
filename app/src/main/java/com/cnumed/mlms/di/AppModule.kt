@@ -2,6 +2,7 @@ package com.cnumed.mlms.di
 
 import android.content.Context
 import androidx.room.Room
+import com.cnumed.mlms.BuildConfig
 import com.cnumed.mlms.data.local.AppDatabase
 import com.cnumed.mlms.data.local.dao.ClassDao
 import com.cnumed.mlms.data.local.dao.NoticeDao
@@ -23,8 +24,12 @@ object AppModule {
     @Provides
     @Singleton
     fun provideOkHttpClient(cookieStore: SessionCookieStore): OkHttpClient {
+        // OkHttp 로거는 android.util.Log가 아니라 Platform.log를 타므로
+        // proguard의 -assumenosideeffects로는 안 지워진다. 빌드 타입으로 직접 끈다.
+        // (HEADERS 레벨은 세션 쿠키가 그대로 찍히므로 release에서 절대 켜면 안 된다.)
         val logging = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.HEADERS
+            level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.HEADERS
+                    else HttpLoggingInterceptor.Level.NONE
         }
         return OkHttpClient.Builder()
             .followRedirects(true)

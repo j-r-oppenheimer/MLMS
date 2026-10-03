@@ -1,6 +1,7 @@
 package com.cnumed.mlms.ui.main
 
-import android.util.Log
+import com.cnumed.mlms.util.AppLog
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.cnumed.mlms.data.remote.LoginResult
@@ -37,7 +38,7 @@ class MainViewModel @Inject constructor(
         viewModelScope.launch {
             // 1. 기존 세션이 아직 유효한지 확인
             if (sessionManager.isSessionValid()) {
-                Log.d(TAG, "Existing session valid")
+                AppLog.d(TAG, "Existing session valid")
                 _loginState.value = MainLoginState.LoggedIn
                 return@launch
             }
@@ -47,20 +48,20 @@ class MainViewModel @Inject constructor(
             val pwd = securePrefs.getPassword()
 
             if (id != null && pwd != null) {
-                Log.d(TAG, "Session expired, auto re-login for user=$id")
+                AppLog.d(TAG, "Session expired, auto re-login for user=$id")
                 val result = sessionManager.login(id, pwd)
                 _loginState.value = when (result) {
                     is LoginResult.Success -> {
-                        Log.d(TAG, "Auto re-login success")
+                        AppLog.d(TAG, "Auto re-login success")
                         MainLoginState.LoggedIn
                     }
                     is LoginResult.Failure -> {
-                        Log.w(TAG, "Auto re-login failed: ${result.message}")
+                        AppLog.w(TAG, "Auto re-login failed: ${result.message}")
                         MainLoginState.LoginFailed(result.message)
                     }
                 }
             } else {
-                Log.d(TAG, "No saved credentials — need login")
+                AppLog.d(TAG, "No saved credentials — need login")
                 _loginState.value = MainLoginState.NeedCredentials
             }
         }

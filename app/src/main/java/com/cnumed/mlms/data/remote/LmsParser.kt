@@ -1,5 +1,7 @@
 package com.cnumed.mlms.data.remote
 
+import com.cnumed.mlms.util.AppLog
+
 import com.cnumed.mlms.domain.model.ClassItem
 import com.cnumed.mlms.domain.model.LessonDetail
 import com.cnumed.mlms.domain.model.LessonFile
@@ -34,11 +36,11 @@ class LmsParser @Inject constructor() {
 
         // 로그인 리다이렉트 감지
         if (doc.select("input[name=id], input[name=username], input[name=pwd]").isNotEmpty()) {
-            android.util.Log.w("LmsParser", "parseNotices: redirected to login page")
+            AppLog.w("LmsParser", "parseNotices: redirected to login page")
             return notices
         }
 
-        android.util.Log.d("LmsParser", "parseNotices HTML: title='${doc.title()}' bodyLen=${html.length} tbodyRows=${doc.select("tbody#noticeListView tr").size}")
+        AppLog.d("LmsParser", "parseNotices HTML: title='${doc.title()}' bodyLen=${html.length} tbodyRows=${doc.select("tbody#noticeListView tr").size}")
 
         // ── SLife 구조 (충남대 의대 LMS): tbody#noticeListView ──
         // 제목 td에 a 태그 없이 onclick="boardDetail(seq)" 사용
@@ -69,7 +71,7 @@ class LmsParser @Inject constructor() {
                     notices.add(Notice(id = id, title = title, date = date, viewCount = viewCount, url = url))
                 } catch (_: Exception) { }
             }
-            android.util.Log.d("LmsParser", "SLife parse: ${notices.size} notices")
+            AppLog.d("LmsParser", "SLife parse: ${notices.size} notices")
             if (notices.isNotEmpty()) return notices
         }
 
@@ -123,7 +125,7 @@ class LmsParser @Inject constructor() {
             } catch (_: Exception) { }
         }
 
-        android.util.Log.d("LmsParser", "Generic parse: ${notices.size} notices")
+        AppLog.d("LmsParser", "Generic parse: ${notices.size} notices")
         return notices
     }
 
@@ -162,9 +164,9 @@ class LmsParser @Inject constructor() {
                 notices.add(Notice(id = id, title = title, date = date, viewCount = viewCnt, url = url))
             }
         } catch (e: Exception) {
-            android.util.Log.w("LmsParser", "parseNoticesJson error: ${e.message}")
+            AppLog.w("LmsParser", "parseNoticesJson error: ${e.message}")
         }
-        android.util.Log.d("LmsParser", "JSON parse: ${notices.size} notices")
+        AppLog.d("LmsParser", "JSON parse: ${notices.size} notices")
         return notices
     }
 
@@ -202,15 +204,15 @@ class LmsParser @Inject constructor() {
             if (dates.isNotEmpty()) return@run dates
 
             // 없으면 weekStart 기준 일~토 7일 생성 (컬럼 인덱스 매핑용)
-            android.util.Log.w("LmsParser", "No data-date found; fallback to weekStart=$weekStart")
+            AppLog.w("LmsParser", "No data-date found; fallback to weekStart=$weekStart")
             (0..6).map { weekStart.plusDays(it.toLong()).toString() }
         }
-        android.util.Log.d("LmsParser", "dayDates=$dayDates")
+        AppLog.d("LmsParser", "dayDates=$dayDates")
 
         // === 2. 이벤트 파싱 ===
         // ".fc-content:has(.fc-time):has(.fc-title)" → 이 LMS의 이벤트 컨텐츠 구조
         val eventDivs = doc.select(".fc-content:has(.fc-time):has(.fc-title)")
-        android.util.Log.d("LmsParser", "fc-content events: ${eventDivs.size}")
+        AppLog.d("LmsParser", "fc-content events: ${eventDivs.size}")
 
         for (eventDiv in eventDivs) {
             try {
@@ -253,12 +255,12 @@ class LmsParser @Inject constructor() {
                     // ④ 진단: 부모 체인 로깅
                     val chain = eventDiv.parents().take(5)
                         .joinToString(" > ") { "${it.tagName()}.${it.className().take(20)}" }
-                    android.util.Log.w("LmsParser", "No date for '$titleText' | parent chain: $chain")
+                    AppLog.w("LmsParser", "No date for '$titleText' | parent chain: $chain")
                     "" // 결정 불가
                 }
 
                 if (dateStr.isEmpty()) {
-                    android.util.Log.w("LmsParser", "No date for: $titleText | $timeText")
+                    AppLog.w("LmsParser", "No date for: $titleText | $timeText")
                     continue
                 }
 
@@ -266,7 +268,7 @@ class LmsParser @Inject constructor() {
                 val (startTime, endTime) = parseTimeRange(timeText) ?: continue
                 val (title, professor) = parseTitleProfessor(titleText)
 
-                android.util.Log.d("LmsParser", "[$dateStr] $title | $timeText")
+                AppLog.d("LmsParser", "[$dateStr] $title | $timeText")
                 classes.add(ClassItem(
                     title = title, professor = professor,
                     dayOfWeek = date.dayOfWeek.value,
@@ -277,7 +279,7 @@ class LmsParser @Inject constructor() {
             } catch (_: Exception) { }
         }
 
-        android.util.Log.d("LmsParser", "Total from HTML: ${classes.size}")
+        AppLog.d("LmsParser", "Total from HTML: ${classes.size}")
         return classes
     }
 
@@ -293,7 +295,7 @@ class LmsParser @Inject constructor() {
         // 2. h2 텍스트 파싱: "2026년 3월 1 – 7일", "2026년 2월 22 – 28일"
         doc.select("h2").forEach { h2 ->
             val text = h2.text()
-            android.util.Log.d("LmsParser", "h2 candidate: $text")
+            AppLog.d("LmsParser", "h2 candidate: $text")
             val m = Regex("""(\d{4})년\s*(\d{1,2})월\s*(\d{1,2})""").find(text) ?: return@forEach
             try {
                 return LocalDate.of(
@@ -534,13 +536,13 @@ class LmsParser @Inject constructor() {
         val doc = Jsoup.parse(html)
         val scriptContent = doc.select("script:not([src])").joinToString("\n") { it.data() }
 
-        android.util.Log.d("LmsParser", "Script length: ${scriptContent.length}")
+        AppLog.d("LmsParser", "Script length: ${scriptContent.length}")
         // script 내 /aca/ 경로 있는 URL 힌트 출력
         Regex("""['"]([/][^'"]{3,60})['"]""").findAll(scriptContent)
             .map { it.groupValues[1] }
             .filter { it.contains("aca") || it.contains("schedule") || it.contains("calendar") || it.contains("event") }
             .distinct()
-            .forEach { android.util.Log.d("LmsParser", "JS URL hint: $it") }
+            .forEach { AppLog.d("LmsParser", "JS URL hint: $it") }
 
         val patterns = listOf(
             // events: { url: '/path' }

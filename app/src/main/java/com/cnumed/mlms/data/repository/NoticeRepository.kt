@@ -1,5 +1,7 @@
 package com.cnumed.mlms.data.repository
 
+import com.cnumed.mlms.util.AppLog
+
 import com.cnumed.mlms.data.local.dao.NoticeDao
 import com.cnumed.mlms.data.local.entity.NoticeEntity
 import com.cnumed.mlms.data.remote.LmsApi
@@ -29,11 +31,11 @@ class NoticeRepository @Inject constructor(
             // AJAX 엔드포인트로 직접 요청 (JS가 이 URL로 데이터를 가져옴)
             val ajaxHtml = api.getAjax(LmsApi.NOTICE_AJAX_URL, referer = LmsApi.NOTICE_URL)
             var notices = parser.parseNotices(ajaxHtml)
-            android.util.Log.d("NoticeRepository", "AJAX: ${notices.size} notices")
+            AppLog.d("NoticeRepository", "AJAX: ${notices.size} notices")
 
             // 폴백: 페이지 HTML 직접 파싱 시도
             if (notices.isEmpty()) {
-                android.util.Log.d("NoticeRepository", "AJAX empty, trying page HTML")
+                AppLog.d("NoticeRepository", "AJAX empty, trying page HTML")
                 val html = api.get(LmsApi.NOTICE_URL)
                 notices = parser.parseNotices(html)
             }
@@ -50,7 +52,7 @@ class NoticeRepository @Inject constructor(
 
             Result.success(notices)
         } catch (e: Exception) {
-            android.util.Log.e("NoticeRepository", "fetchNotices failed", e)
+            AppLog.e("NoticeRepository", "fetchNotices failed", e)
             Result.failure(e)
         }
     }

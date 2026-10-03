@@ -3,7 +3,7 @@ package com.cnumed.mlms.data.repository
 import android.app.DownloadManager
 import android.content.Context
 import android.os.Environment
-import android.util.Log
+import com.cnumed.mlms.util.AppLog
 import com.cnumed.mlms.data.local.dao.ClassDao
 import com.cnumed.mlms.data.local.entity.ClassEntity
 import com.cnumed.mlms.data.remote.LmsApi
@@ -67,7 +67,7 @@ class TimetableRepository @Inject constructor(
         return try {
             // 캐시 범위 안이면 DB에서 바로 반환
             if (isWeekCached(weekStart)) {
-                Log.d(TAG, "Week $weekStart in cached range — using DB")
+                AppLog.d(TAG, "Week $weekStart in cached range — using DB")
                 val cached = classDao.getClassesByWeekOnce(weekStart.toString())
                     .map { it.toDomain() }
                 // 캐시 범위 안이면 수업이 0개여도 '확인된 빈 주(방학)' — 위젯 캐시에도
@@ -82,13 +82,13 @@ class TimetableRepository @Inject constructor(
 
             // WebView에서 FullCalendar 전체 이벤트 한 번에 추출
             val json = webLoader.loadAllEvents()
-            Log.d(TAG, "WebView all events len=${json.length} | preview=${json.take(300)}")
+            AppLog.d(TAG, "WebView all events len=${json.length} | preview=${json.take(300)}")
 
             val allClasses = parser.parseAllTimetableJson(json)
-            Log.d(TAG, "Parsed ${allClasses.size} total classes across all weeks")
+            AppLog.d(TAG, "Parsed ${allClasses.size} total classes across all weeks")
 
             if (allClasses.isEmpty()) {
-                Log.d(TAG, "Empty result — no classes loaded from calendar")
+                AppLog.d(TAG, "Empty result — no classes loaded from calendar")
                 return Result.success(emptyList())
             }
 
@@ -104,7 +104,7 @@ class TimetableRepository @Inject constructor(
             val weeks = byWeek.keys.sorted()
             cachedRangeMin = weeks.first()
             cachedRangeMax = weeks.last()
-            Log.d(TAG, "Cached range: $cachedRangeMin ~ $cachedRangeMax (${byWeek.size} weeks)")
+            AppLog.d(TAG, "Cached range: $cachedRangeMin ~ $cachedRangeMax (${byWeek.size} weeks)")
 
             // 로드는 성공했으나 요청한 주에 수업이 없으면(방학) 빈 배열을 위젯 캐시에 기록.
             // 위 byWeek 루프는 수업이 있는 주만 저장하므로, 빈 주는 여기서 명시적으로
@@ -115,7 +115,7 @@ class TimetableRepository @Inject constructor(
             }
             Result.success(weekClasses)
         } catch (e: Exception) {
-            Log.e(TAG, "fetchWeek failed", e)
+            AppLog.e(TAG, "fetchWeek failed", e)
             Result.failure(e)
         }
     }
@@ -160,7 +160,7 @@ class TimetableRepository @Inject constructor(
         } catch (e: kotlin.coroutines.cancellation.CancellationException) {
             throw e
         } catch (e: Exception) {
-            Log.e(TAG, "fetchLessonDetail failed", e)
+            AppLog.e(TAG, "fetchLessonDetail failed", e)
             Result.failure(e)
         }
     }
@@ -198,13 +198,13 @@ class TimetableRepository @Inject constructor(
             }
 
             val downloadId = dm.enqueue(request)
-            Log.d(TAG, "Download enqueued: id=$downloadId, file=${file.fileName}")
+            AppLog.d(TAG, "Download enqueued: id=$downloadId, file=${file.fileName}")
 
             Result.success(downloadId)
         } catch (e: kotlin.coroutines.cancellation.CancellationException) {
             throw e
         } catch (e: Exception) {
-            Log.e(TAG, "downloadFile failed", e)
+            AppLog.e(TAG, "downloadFile failed", e)
             Result.failure(e)
         }
     }

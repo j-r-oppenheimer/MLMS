@@ -1,6 +1,6 @@
 package com.cnumed.mlms.ui.notice
 
-import android.util.Log
+import com.cnumed.mlms.util.AppLog
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.cnumed.mlms.data.repository.NoticeRepository
@@ -48,16 +48,16 @@ class NoticeViewModel @Inject constructor(
         if (hasFetched) return
 
         viewModelScope.launch {
-            Log.d(TAG, "Fetching notices...")
+            AppLog.d(TAG, "Fetching notices...")
             _uiState.value = _uiState.value.copy(isLoading = true)
             val result = repository.fetchNotices()
 
             // 성공 시에만 캐시 플래그 설정
             if (result.isSuccess) {
                 hasFetched = true
-                Log.d(TAG, "Notices fetched: ${result.getOrDefault(emptyList()).size}")
+                AppLog.d(TAG, "Notices fetched: ${result.getOrDefault(emptyList()).size}")
             } else {
-                Log.w(TAG, "Notices fetch failed: ${result.exceptionOrNull()?.message}")
+                AppLog.w(TAG, "Notices fetch failed: ${result.exceptionOrNull()?.message}")
             }
 
             _uiState.value = _uiState.value.copy(

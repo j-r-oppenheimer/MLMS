@@ -4,7 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
-import android.util.Log
+import com.cnumed.mlms.util.AppLog
 import android.webkit.CookieManager
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -58,14 +58,14 @@ class HybridLoginHelper @Inject constructor(
                     private var injected = false
 
                     override fun onPageFinished(view: WebView, url: String) {
-                        Log.d(TAG, "onPageFinished: $url")
+                        AppLog.d(TAG, "onPageFinished: $url")
                         when {
                             // 로그인 페이지 → JS로 자격증명 주입
                             url.contains("/login", ignoreCase = true) && !injected -> {
                                 injected = true
                                 mainHandler.postDelayed({
                                     view.evaluateJavascript(buildInjectScript(id, pwd)) { r ->
-                                        Log.d(TAG, "JS inject result: $r")
+                                        AppLog.d(TAG, "JS inject result: $r")
                                     }
                                 }, 800)
                             }
@@ -79,7 +79,7 @@ class HybridLoginHelper @Inject constructor(
                                 // WebView 쿠키 → SessionCookieStore 저장
                                 val cookies = CookieManager.getInstance()
                                     .getCookie("https://cnu.u-lms.com") ?: ""
-                                Log.d(TAG, "Login success, cookies: $cookies")
+                                AppLog.d(TAG, "Login success, cookies: $cookies")
                                 cookieStore.rawCookies = cookies
 
                                 webView.destroy()

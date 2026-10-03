@@ -20,13 +20,16 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8 활성화 — 코드 축소·난독화와 함께 proguard-rules.pro의
+            // -assumenosideeffects 규칙으로 android.util.Log 호출을 제거한다.
+            isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
 
     buildFeatures {
         viewBinding = true
+        buildConfig = true   // BuildConfig.DEBUG로 디버그 전용 로깅을 가른다
     }
 
     compileOptions {

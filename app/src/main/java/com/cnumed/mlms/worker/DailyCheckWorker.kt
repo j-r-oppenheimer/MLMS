@@ -1,5 +1,7 @@
 package com.cnumed.mlms.worker
 
+import com.cnumed.mlms.util.AppLog
+
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
@@ -34,7 +36,7 @@ class DailyCheckWorker @AssistedInject constructor(
             checkNotices()
             Result.success()
         } catch (e: Exception) {
-            android.util.Log.e(TAG, "DailyCheckWorker failed", e)
+            AppLog.e(TAG, "DailyCheckWorker failed", e)
             Result.failure()
         }
     }

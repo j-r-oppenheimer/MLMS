@@ -1,6 +1,6 @@
 package com.cnumed.mlms.data.remote
 
-import android.util.Log
+import com.cnumed.mlms.util.AppLog
 import com.cnumed.mlms.util.SecurePrefs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -36,10 +36,10 @@ class SessionManager @Inject constructor(
             val (finalUrl, body) = api.getWithFinalUrl(LmsApi.MAIN_URL)
             val valid = !finalUrl.contains("/login", ignoreCase = true)
             isLoggedIn = valid
-            Log.d(TAG, "Session valid=$valid | finalUrl=$finalUrl | bodyLen=${body.length}")
+            AppLog.d(TAG, "Session valid=$valid | finalUrl=$finalUrl | bodyLen=${body.length}")
             valid
         } catch (e: Exception) {
-            Log.e(TAG, "Session check failed", e)
+            AppLog.e(TAG, "Session check failed", e)
             false
         }
     }
@@ -49,7 +49,7 @@ class SessionManager @Inject constructor(
         if (isSessionValid()) return true
         val id  = securePrefs.getId()      ?: return false
         val pwd = securePrefs.getPassword() ?: return false
-        Log.d(TAG, "Session expired — auto re-login")
+        AppLog.d(TAG, "Session expired — auto re-login")
         return login(id, pwd) is LoginResult.Success
     }
 

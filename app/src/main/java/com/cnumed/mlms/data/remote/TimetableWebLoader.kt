@@ -4,7 +4,7 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.os.Handler
 import android.os.Looper
-import android.util.Log
+import com.cnumed.mlms.util.AppLog
 import android.webkit.CookieManager
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -62,7 +62,7 @@ class TimetableWebLoader @Inject constructor(
                 }
 
                 val timeoutRunnable = Runnable {
-                    Log.w(TAG, "TimetableWebLoader timeout")
+                    AppLog.w(TAG, "TimetableWebLoader timeout")
                     resolve("[]")
                 }
                 mainHandler.postDelayed(timeoutRunnable, 35_000)
@@ -101,7 +101,7 @@ class TimetableWebLoader @Inject constructor(
                     """.trimIndent()
 
                     webView.evaluateJavascript(js) { result ->
-                        Log.d(TAG, "All events JS result (${result?.length}): ${result?.take(300)}")
+                        AppLog.d(TAG, "All events JS result (${result?.length}): ${result?.take(300)}")
                         resolve(result ?: "[]")
                     }
                 }
@@ -122,15 +122,15 @@ class TimetableWebLoader @Inject constructor(
                         if (settled) return@postDelayed
                         view.evaluateJavascript(checkJs) { r ->
                             val count = r?.trim()?.toIntOrNull() ?: -1
-                            Log.d(TAG, "Poll attempt ${attempt + 1}: $count total events")
+                            AppLog.d(TAG, "Poll attempt ${attempt + 1}: $count total events")
                             when {
                                 count > 0 -> {
-                                    Log.d(TAG, "Events found after ${(attempt + 1) * 300}ms")
+                                    AppLog.d(TAG, "Events found after ${(attempt + 1) * 300}ms")
                                     extractAllEvents()
                                 }
                                 attempt < 9 -> pollForEvents(view, attempt + 1)
                                 else -> {
-                                    Log.w(TAG, "Poll timeout — extracting anyway")
+                                    AppLog.w(TAG, "Poll timeout — extracting anyway")
                                     extractAllEvents()
                                 }
                             }
@@ -143,20 +143,20 @@ class TimetableWebLoader @Inject constructor(
 
                     override fun onPageFinished(view: WebView, url: String) {
                         if (settled || calendarLoaded) return
-                        Log.d(TAG, "onPageFinished: $url")
+                        AppLog.d(TAG, "onPageFinished: $url")
                         if (!url.contains("MYscheduleMST", ignoreCase = true)) return
                         calendarLoaded = true
 
                         // FullCalendar 초기화 + AJAX 로드 대기 후 전체 이벤트 추출
                         mainHandler.postDelayed({
                             if (settled) return@postDelayed
-                            Log.d(TAG, "Polling for all events")
+                            AppLog.d(TAG, "Polling for all events")
                             pollForEvents(view, 0)
                         }, 500)
                     }
                 }
 
-                Log.d(TAG, "Loading timetable via WebView")
+                AppLog.d(TAG, "Loading timetable via WebView")
                 webView.loadUrl(LmsApi.TIMETABLE_URL)
             }
         }
@@ -198,7 +198,7 @@ class TimetableWebLoader @Inject constructor(
                 }
 
                 val timeoutRunnable = Runnable {
-                    Log.w(TAG, "loadLessonDetail timeout")
+                    AppLog.w(TAG, "loadLessonDetail timeout")
                     resolve("{}")
                 }
                 mainHandler.postDelayed(timeoutRunnable, 15_000)

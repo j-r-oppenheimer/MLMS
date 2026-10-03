@@ -3,7 +3,7 @@ package com.cnumed.mlms.ui.timetable
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
-import android.util.Log
+import com.cnumed.mlms.util.AppLog
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.cnumed.mlms.data.repository.TimetableRepository
@@ -69,7 +69,7 @@ class TimetableViewModel @Inject constructor(
     fun loadWeek(weekStart: LocalDate) {
         // ViewModel 세션 캐시 또는 Repository 벌크 캐시에 있으면 로딩 표시 안 함
         val isCached = sessionCache.containsKey(weekStart) || repository.isWeekCached(weekStart)
-        Log.d(TAG, "loadWeek($weekStart) cached=$isCached")
+        AppLog.d(TAG, "loadWeek($weekStart) cached=$isCached")
         _uiState.value = _uiState.value.copy(
             weekStart = weekStart,
             isLoading = !isCached,
@@ -91,7 +91,7 @@ class TimetableViewModel @Inject constructor(
 
                 if (result.isSuccess) {
                     val newClasses = result.getOrDefault(emptyList())
-                    Log.d(TAG, "fetchWeek result: ${newClasses.size} classes")
+                    AppLog.d(TAG, "fetchWeek result: ${newClasses.size} classes")
                     if (newClasses.isNotEmpty()) {
                         sessionCache[weekStart] = true
                         syncWidget(weekStart, newClasses)
