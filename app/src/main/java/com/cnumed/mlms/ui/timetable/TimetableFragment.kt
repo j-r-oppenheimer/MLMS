@@ -1,12 +1,18 @@
 package com.cnumed.mlms.ui.timetable
 
+import android.graphics.drawable.Drawable
+import android.graphics.drawable.GradientDrawable
+import android.graphics.drawable.InsetDrawable
 import android.os.Bundle
 import android.text.SpannableString
 import android.text.style.StyleSpan
+import android.graphics.Rect
 import android.graphics.Typeface
+import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
@@ -18,6 +24,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import com.cnumed.mlms.databinding.FragmentTimetableBinding
 import com.cnumed.mlms.domain.model.ClassItem
 import com.cnumed.mlms.domain.model.LessonFile
+import com.cnumed.mlms.util.ClassColorPrefs
 import com.cnumed.mlms.util.DateUtils
 import com.cnumed.mlms.util.ThemeColorManager
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
@@ -63,14 +70,71 @@ class TimetableFragment : Fragment() {
             StyleSpan(Typeface.BOLD), 0, cls.title.length,
             SpannableString.SPAN_EXCLUSIVE_EXCLUSIVE
         )
+        val dotTouch = (28 * density).toInt()   // 터치 영역
+        val dotSize = (12 * density).toInt()    // 눈에 보이는 원 크기
+        val dotInset = (dotTouch - dotSize) / 2
+        val titleTopPad = (22 * density).toInt()
+
         val titleView = TextView(requireContext()).apply {
             text = titleSpannable
             this.textSize = 20f
             maxLines = Int.MAX_VALUE
-            setPadding(pad, (22 * density).toInt(), pad, padSmall)
+            // 오른쪽은 색 원(카드 여백 + 원 + 간격)만큼 비워 제목이 원 밑으로 들어가지 않게 한다.
+            setPadding(pad, titleTopPad, pad + dotSize + padSmall, padSmall)
             val ta = requireContext().obtainStyledAttributes(intArrayOf(android.R.attr.textColorPrimary))
             setTextColor(ta.getColor(0, 0xFF000000.toInt()))
             ta.recycle()
+        }
+
+        // 카드 우상단 모서리의 작은 색 원. 평소엔 테마 색, 누르면 보색으로 바뀌면서
+        // 이 수업 칸(그 회차 하나)만 보색으로 칠해진다.
+        val themeColor = ThemeColorManager.getColor(requireContext())
+        val invertedColor = ClassColorPrefs.complementary(themeColor)
+        var inverted = ClassColorPrefs.isInverted(
+            requireContext(), cls.title, cls.date, cls.startTime
+        )
+
+        fun dotDrawable(color: Int): Drawable = InsetDrawable(
+            GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(color)
+            },
+            dotInset
+        )
+
+        // 원 중심을 제목 첫 줄의 "글자" 중앙에 맞춘다.
+        // textSize/2로 잡으면 글자 위 어센더 여백까지 반으로 나누는 셈이라 약 0.08em(20sp에서 ~2dp) 위로 뜬다.
+        // 제목 자체를 재면 디센더('y', 괄호 등) 유무에 따라 팝업마다 원 높이가 달라지므로,
+        // 한글·라틴 대문자 기준 글자("가H")의 잉크 높이로 고정한다.
+        val fm = titleView.paint.fontMetrics
+        val firstBaseline = titleTopPad - fm.top          // includeFontPadding 기본값(true) 기준
+        val ink = Rect().also { titleView.paint.getTextBounds("가H", 0, 2, it) }
+        val glyphCenter = firstBaseline + (ink.top + ink.bottom) / 2f
+
+        val colorDot = View(requireContext()).apply {
+            layoutParams = FrameLayout.LayoutParams(dotTouch, dotTouch).apply {
+                gravity = Gravity.TOP or Gravity.END
+                // 터치 영역이 원보다 크므로 그 여백(dotInset)을 빼서
+                // "보이는 원"이 카드 컨텐츠 여백선·제목 첫 줄 글자 중앙에 맞도록 한다.
+                topMargin = (glyphCenter - dotTouch / 2f).toInt().coerceAtLeast(0)
+                marginEnd = pad - dotInset
+            }
+            background = dotDrawable(if (inverted) invertedColor else themeColor)
+            contentDescription = "이 수업 칸 색 반전"
+            setOnClickListener {
+                inverted = !inverted
+                background = dotDrawable(if (inverted) invertedColor else themeColor)
+                ClassColorPrefs.setInverted(
+                    requireContext(), cls.title, cls.date, cls.startTime, inverted
+                )
+                _binding?.timetableView?.refreshColors()
+                viewModel.refreshWidgetColors()
+            }
+        }
+
+        val titleBar = FrameLayout(requireContext()).apply {
+            addView(titleView)
+            addView(colorDot)
         }
 
         // 컨텐츠
@@ -153,7 +217,7 @@ class TimetableFragment : Fragment() {
         }
 
         MaterialAlertDialogBuilder(requireContext(), com.cnumed.mlms.R.style.RoundedDialog)
-            .setCustomTitle(titleView)
+            .setCustomTitle(titleBar)
             .setView(contentLayout)
             .setPositiveButton("닫기", null)
             .show()

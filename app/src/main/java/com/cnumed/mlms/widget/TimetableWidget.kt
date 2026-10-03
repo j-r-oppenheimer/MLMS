@@ -15,6 +15,7 @@ import androidx.work.OutOfQuotaPolicy
 import androidx.work.WorkManager
 import androidx.work.workDataOf
 import com.cnumed.mlms.R
+import com.cnumed.mlms.util.ClassColorPrefs
 import org.json.JSONArray
 import java.time.LocalDate
 import java.time.LocalTime
@@ -108,6 +109,7 @@ class TimetableWidget : AppWidgetProvider() {
             val selectedClass = classPrefs.getString("selected_class", "A") ?: "A"
             val customColorHex = classPrefs.getString("block_color", "#8D9DB6") ?: "#8D9DB6"
             val examHighlight = classPrefs.getBoolean("exam_highlight", true)
+            val invertedKeys = ClassColorPrefs.invertedKeys(context)
 
             val filteredClasses = if (selectedClass == "ALL") {
                 classes ?: emptyList()
@@ -136,7 +138,7 @@ class TimetableWidget : AppWidgetProvider() {
             val bitmap = if (isLoading) {
                 drawLoadingBitmap(w, h, density, weekStart, isDarkMode, bgAlpha)
             } else {
-                drawTimetable(w, h, density, weekStart, filteredClasses, isDarkMode, bgAlpha, textSize, customColorHex, blockAlpha, examHighlight)
+                drawTimetable(w, h, density, weekStart, filteredClasses, isDarkMode, bgAlpha, textSize, customColorHex, blockAlpha, examHighlight, invertedKeys)
             }
 
             val prevPi = android.app.PendingIntent.getBroadcast(
@@ -307,16 +309,6 @@ class TimetableWidget : AppWidgetProvider() {
             return bitmap
         }
 
-        private val examKeywords = listOf("시험", "중간", "기말", "평가")
-        private fun isExamClass(title: String) = examKeywords.any { it in title }
-        private fun examColor(base: Int, dark: Boolean): Int {
-            val r = Color.red(base); val g = Color.green(base); val b = Color.blue(base)
-            return if (dark)
-                Color.rgb(r + ((255 - r) * 0.20f).toInt(), g + ((255 - g) * 0.20f).toInt(), b + ((255 - b) * 0.20f).toInt())
-            else
-                Color.rgb((r * 0.85f).toInt(), (g * 0.85f).toInt(), (b * 0.85f).toInt())
-        }
-
         private fun drawTimetable(
             width: Int,
             height: Int,
@@ -328,7 +320,8 @@ class TimetableWidget : AppWidgetProvider() {
             textSizeScale: Int,
             customColorHex: String,
             blockAlpha: Int,
-            examHighlight: Boolean = true
+            examHighlight: Boolean = true,
+            invertedKeys: Set<String> = emptySet()
         ): Bitmap {
             val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bitmap)
@@ -446,8 +439,10 @@ class TimetableWidget : AppWidgetProvider() {
             for (cls in classes) {
                 val layout = layoutMap[cls] ?: continue
 
-                blockPaint.color = if (examHighlight && isExamClass(cls.title))
-                    examColor(customColor, isDarkMode) else customColor
+                blockPaint.color = ClassColorPrefs.blockColorFor(
+                    cls.title, cls.date, cls.startTime,
+                    customColor, invertedKeys, examHighlight, isDarkMode
+                )
                 blockPaint.alpha = blockAlpha
                 canvas.drawRoundRect(RectF(layout.x, layout.y1, layout.x + layout.bw, layout.y1 + layout.bh), 3f, 3f, blockPaint)
 

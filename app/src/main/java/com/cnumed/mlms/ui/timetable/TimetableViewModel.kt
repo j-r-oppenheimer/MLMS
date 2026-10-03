@@ -115,6 +115,13 @@ class TimetableViewModel @Inject constructor(
         com.cnumed.mlms.widget.CountdownWidget.refreshAll(context)
     }
 
+    /** 색 설정만 바뀐 경우: 캐시는 그대로 두고 시간표 위젯만 다시 그린다. */
+    fun refreshWidgetColors() {
+        val awm = AppWidgetManager.getInstance(context)
+        val ids = awm.getAppWidgetIds(ComponentName(context, TimetableWidget::class.java))
+        for (id in ids) TimetableWidget.updateWidget(context, awm, id)
+    }
+
     /** 설정(반 선택 등) 변경 후 재방문 시 DB 재조회 없이 필터만 재적용 */
     fun refilter() {
         viewModelScope.launch {

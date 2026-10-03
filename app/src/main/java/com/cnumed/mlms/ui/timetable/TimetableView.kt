@@ -13,6 +13,7 @@ import android.util.AttributeSet
 import android.view.MotionEvent
 import android.view.View
 import com.cnumed.mlms.domain.model.ClassItem
+import com.cnumed.mlms.util.ClassColorPrefs
 import java.time.LocalDate
 import java.time.LocalTime
 
@@ -32,18 +33,7 @@ class TimetableView @JvmOverloads constructor(
     private var blockColor: Int = Color.parseColor("#8D9DB6")
     private var isDarkMode: Boolean = false
     private var examHighlightEnabled: Boolean = true
-
-    private val examKeywords = listOf("시험", "중간", "기말", "평가")
-
-    private fun isExamClass(title: String) = examKeywords.any { it in title }
-
-    private fun examColor(base: Int, dark: Boolean): Int {
-        val r = Color.red(base); val g = Color.green(base); val b = Color.blue(base)
-        return if (dark)
-            Color.rgb(r + ((255 - r) * 0.20f).toInt(), g + ((255 - g) * 0.20f).toInt(), b + ((255 - b) * 0.20f).toInt())
-        else
-            Color.rgb((r * 0.85f).toInt(), (g * 0.85f).toInt(), (b * 0.85f).toInt())
-    }
+    private var invertedKeys: Set<String> = emptySet()
 
     private val dp get() = context.resources.displayMetrics.density
     private val timeColW get() = 28f * dp
@@ -102,7 +92,14 @@ class TimetableView @JvmOverloads constructor(
         }
 
         examHighlightEnabled = prefs.getBoolean("exam_highlight", true)
+        invertedKeys = ClassColorPrefs.invertedKeys(context)
 
+        invalidate()
+    }
+
+    /** 색 관련 설정(수업별 보색 반전 등)만 다시 읽어 즉시 반영한다. */
+    fun refreshColors() {
+        invertedKeys = ClassColorPrefs.invertedKeys(context)
         invalidate()
     }
 
@@ -275,8 +272,10 @@ class TimetableView @JvmOverloads constructor(
             if (layout.h < 4f * dp) continue
 
             // 1. 블록 배경 그리기
-            blockPaint.color = if (examHighlightEnabled && isExamClass(cls.title))
-                examColor(blockColor, isDarkMode) else blockColor
+            blockPaint.color = ClassColorPrefs.blockColorFor(
+                cls.title, cls.date, cls.startTime,
+                blockColor, invertedKeys, examHighlightEnabled, isDarkMode
+            )
             canvas.drawRoundRect(RectF(layout.x, layout.y1, layout.x + layout.w, layout.y1 + layout.h), 6f * dp, 6f * dp, blockPaint)
 
             // 블록 영역 클리핑 (넘치는 텍스트는 말줄임 없이 그냥 잘림)
