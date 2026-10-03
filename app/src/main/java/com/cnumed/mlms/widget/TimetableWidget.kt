@@ -68,6 +68,9 @@ class TimetableWidget : AppWidgetProvider() {
         private const val SIZE_PIVOT_DP = 260f
 
         const val KEY_WEEK_OFFSET  = "widget_week_offset"
+        // offset이 기준 삼았던 "현재 주 일요일". 실제 달력상 주가 바뀌면 offset을 0으로
+        // 되돌려, 넘겨봤던 주가 현재 주에 중복으로 얹혀 한 주 더 밀리는 것을 막는다.
+        const val KEY_WEEK_ANCHOR  = "widget_week_anchor"
         const val KEY_BG_ALPHA     = "widget_bg_alpha"
         const val KEY_BLOCK_ALPHA  = "widget_block_alpha"
         const val KEY_DARK_MODE    = "widget_dark_mode"
@@ -96,6 +99,17 @@ class TimetableWidget : AppWidgetProvider() {
 
         fun updateWidget(context: Context, manager: AppWidgetManager, widgetId: Int) {
             val prefs      = context.getSharedPreferences(PREFS_WIDGET, Context.MODE_PRIVATE)
+
+            // 실제 주가 바뀌면 offset을 0으로 초기화 → 위젯을 현재 주에 다시 맞춘다.
+            // (앵커가 없거나 저장된 주와 다르면 주가 바뀐 것으로 판단)
+            val currentSunday = currentWeekSunday()
+            if (prefs.getString(KEY_WEEK_ANCHOR, null) != currentSunday.toString()) {
+                prefs.edit()
+                    .putString(KEY_WEEK_ANCHOR, currentSunday.toString())
+                    .putInt(KEY_WEEK_OFFSET, 0)
+                    .apply()
+            }
+
             val weekOffset = prefs.getInt(KEY_WEEK_OFFSET, 0)
             val bgAlpha    = prefs.getInt(KEY_BG_ALPHA, 255)
             val blockAlpha = prefs.getInt(KEY_BLOCK_ALPHA, 255)
