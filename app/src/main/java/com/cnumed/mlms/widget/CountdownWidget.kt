@@ -15,6 +15,8 @@ import androidx.work.OutOfQuotaPolicy
 import androidx.work.WorkManager
 import androidx.work.workDataOf
 import com.cnumed.mlms.R
+import com.cnumed.mlms.util.ClassColorPrefs
+import com.cnumed.mlms.util.AppLog
 import org.json.JSONArray
 import java.time.LocalDate
 import java.time.LocalTime
@@ -55,6 +57,8 @@ abstract class CountdownWidget : AppWidgetProvider() {
 
     companion object {
 
+        private const val TAG = "CountdownWidget"
+
         const val PREFS_WIDGET = TimetableWidget.PREFS_WIDGET // "widget_cache"
 
         // 글씨 크기 감쇠 파라미터. SIZE_DAMP<1 이면 위젯 크기 변화에 덜 민감(작을수록 완만).
@@ -71,8 +75,17 @@ abstract class CountdownWidget : AppWidgetProvider() {
         private fun keyDark(id: Int)     = "countdown_${id}_dark"
         private fun keyTextSize(id: Int) = "countdown_${id}_text_size"
 
-        private val examKeywords = listOf("시험", "중간", "기말", "평가")
-        private fun isExamClass(title: String) = examKeywords.any { it in title }
+        private fun isExamClass(title: String) = ClassColorPrefs.isExamClass(title)
+
+        // LMS 주간표의 "교과" 기간 배너(수업이 아님). 캐시 실물: title="약물작용의 원리 2[8 / 17~10 / 23]".
+        // 과목 기간 시작일 = 주 시작 월요일에 걸려서 개강일을 하루 앞당기므로 경계 계산에서 뺀다.
+        // 소괄호 형태면 LmsParser.parseTitleProfessor가 professor 자리로 떼어내므로 그쪽도 본다.
+        private val periodOnlyRegex = Regex("""^\d{1,2}\s*/\s*\d{1,2}\s*[~\-–]\s*\d{1,2}\s*/\s*\d{1,2}$""")
+        private val periodInTitleRegex =
+            Regex("""[(\[（【]\s*\d{1,2}\s*/\s*\d{1,2}\s*[~\-–]\s*\d{1,2}\s*/\s*\d{1,2}\s*[)\]）】]""")
+
+        private fun isCoursePeriodBanner(title: String, professor: String): Boolean =
+            periodInTitleRegex.containsMatchIn(title) || periodOnlyRegex.matches(professor.trim())
 
         private val dayLabels = listOf("월", "화", "수", "목", "금", "토", "일")
 
@@ -119,6 +132,7 @@ abstract class CountdownWidget : AppWidgetProvider() {
                     for (i in 0 until arr.length()) {
                         val obj = arr.getJSONObject(i)
                         val title = obj.optString("title")
+                        if (isCoursePeriodBanner(title, obj.optString("professor"))) continue
                         if (!isExamClass(title)) continue
                         if (!matchesSelectedClass(title, selectedClass)) continue
                         result.add(
@@ -134,7 +148,10 @@ abstract class CountdownWidget : AppWidgetProvider() {
             return result
         }
 
-        /** 캐시된 모든 주차의 전체 수업 날짜(중복 제거·정렬). 학기/방학 경계 판정용(A/B 필터 없음). */
+        /**
+         * 캐시된 모든 주차의 전체 수업 날짜(중복 제거·정렬). 학기/방학 경계 판정용(A/B 필터 없음).
+         * 교과 기간 배너는 제외한다([isCoursePeriodBanner]).
+         */
         private fun loadAllClassDates(context: Context): List<LocalDate> {
             val prefs = context.getSharedPreferences(PREFS_WIDGET, Context.MODE_PRIVATE)
             val dates = sortedSetOf<LocalDate>()
@@ -144,11 +161,58 @@ abstract class CountdownWidget : AppWidgetProvider() {
                 try {
                     val arr = JSONArray(json)
                     for (i in 0 until arr.length()) {
-                        dates.add(LocalDate.parse(arr.getJSONObject(i).optString("date")))
+                        val obj = arr.getJSONObject(i)
+                        if (isCoursePeriodBanner(obj.optString("title"), obj.optString("professor"))) continue
+                        dates.add(LocalDate.parse(obj.optString("date")))
                     }
                 } catch (_: Exception) { /* 손상된 주는 건너뜀 */ }
             }
             return dates.toList()
+        }
+
+        /**
+         * 캐시 실물 덤프(디버그 빌드 전용) — 개강/종강 D-day가 실제 수업일과 어긋날 때 쓴다.
+         * 오늘 기준 -7 ~ +35일 구간의 항목을 날짜순으로 찍는다.
+         *
+         * 보는 법: `adb logcat -s CountdownWidget`
+         *  - banner=true 로 걸러진 항목이 무엇인지
+         *  - 월요일 항목의 title/professor 실제 문자열이 어떤 형태인지
+         *
+         * release에서 봐야 하면 [AppLog.FORCE_LOG]와 isMinifyEnabled를 함께 끌 것.
+         */
+        private fun logCacheDump(context: Context, today: LocalDate) {
+            val prefs = context.getSharedPreferences(PREFS_WIDGET, Context.MODE_PRIVATE)
+            val from = today.minusDays(7)
+            val to = today.plusDays(35)
+
+            val rows = mutableListOf<Pair<LocalDate, String>>()
+            var weekKeys = 0
+            for ((key, value) in prefs.all) {
+                if (!key.startsWith("week_classes_")) continue
+                weekKeys++
+                val json = value as? String ?: continue
+                try {
+                    val arr = JSONArray(json)
+                    for (i in 0 until arr.length()) {
+                        val obj = arr.getJSONObject(i)
+                        val date = LocalDate.parse(obj.optString("date"))
+                        if (date < from || date > to) continue
+                        val title = obj.optString("title")
+                        val prof = obj.optString("professor")
+                        val banner = isCoursePeriodBanner(title, prof)
+                        rows.add(
+                            date to "$date(${date.dayOfWeek}) ${obj.optString("startTime")}" +
+                                "~${obj.optString("endTime")} banner=$banner " +
+                                "title=[$title] prof=[$prof]"
+                        )
+                    }
+                } catch (e: Exception) {
+                    AppLog.w(TAG, "corrupt week: $key", e)
+                }
+            }
+
+            AppLog.d(TAG, "── cache dump: today=$today, weekKeys=$weekKeys, rows=${rows.size} ──")
+            rows.sortedBy { it.first }.forEach { AppLog.d(TAG, "  ${it.second}") }
         }
 
         /**
@@ -211,8 +275,10 @@ abstract class CountdownWidget : AppWidgetProvider() {
             } else {
                 val exams = loadAllExams(context)
                 val allDates = loadAllClassDates(context)
+                logCacheDump(context, LocalDate.now())
                 buildContent(mode, exams, allDates)
             }
+            AppLog.d(TAG, "render mode=$mode id=$widgetId content=$content")
 
             val classPrefs = context.getSharedPreferences("class_settings", Context.MODE_PRIVATE)
             val accentHex = classPrefs.getString("block_color", "#8D9DB6") ?: "#8D9DB6"
@@ -276,14 +342,12 @@ abstract class CountdownWidget : AppWidgetProvider() {
                 }
                 Mode.SEMESTER_END -> {
                     val blocks = segmentSemesters(allDates)
+                    AppLog.d(TAG, "blocks=${blocks.map { "${it.first}~${it.second}" }}")
                     if (blocks.isEmpty()) return CountdownContent.NoExam
                     val current = blocks.firstOrNull { !today.isBefore(it.first) && !today.isAfter(it.second) }
                     if (current != null) {
-                        // 학기 중 → 이 학기의 마지막 시험(없으면 마지막 수업일)까지 종강 D-day
-                        val target = exams
-                            .filter { !it.date.isBefore(current.first) && !it.date.isAfter(current.second) }
-                            .maxWithOrNull(compareBy({ it.date }, { it.startTime }))?.date
-                            ?: current.second
+                        // 학기 중 → 이 학기의 마지막 날(마지막 수업일)까지 종강 D-day
+                        val target = current.second
                         CountdownContent.Data(
                             label = "종강까지",
                             days = ChronoUnit.DAYS.between(today, target),
