@@ -16,6 +16,7 @@ import androidx.work.WorkManager
 import androidx.work.workDataOf
 import com.cnumed.mlms.R
 import com.cnumed.mlms.util.ClassColorPrefs
+import com.cnumed.mlms.util.ClassFilter
 import org.json.JSONArray
 import java.time.LocalDate
 import java.time.LocalTime
@@ -120,24 +121,12 @@ class TimetableWidget : AppWidgetProvider() {
             val classes   = loadClasses(prefs, weekStart)  // null = 미캐시, list = 캐시됨
 
             val classPrefs = context.getSharedPreferences("class_settings", Context.MODE_PRIVATE)
-            val selectedClass = classPrefs.getString("selected_class", "A") ?: "A"
+            val selectedClass = ClassFilter.selectedClass(context)
             val customColorHex = classPrefs.getString("block_color", "#8D9DB6") ?: "#8D9DB6"
             val examHighlight = classPrefs.getBoolean("exam_highlight", true)
             val invertedKeys = ClassColorPrefs.invertedKeys(context)
 
-            val filteredClasses = if (selectedClass == "ALL") {
-                classes ?: emptyList()
-            } else {
-                classes?.filter { cls ->
-                    val title = cls.title.uppercase()
-                    when {
-                        "AB" in title || "AB 반" in title || "A/B" in title -> true
-                        "A반" in title || "A 반" in title -> selectedClass == "A"
-                        "B반" in title || "B 반" in title -> selectedClass == "B"
-                        else -> true
-                    }
-                } ?: emptyList()
-            }
+            val filteredClasses = classes?.filter { ClassFilter.matches(it.title, selectedClass) } ?: emptyList()
 
             val options = manager.getAppWidgetOptions(widgetId)
             val density = context.resources.displayMetrics.density

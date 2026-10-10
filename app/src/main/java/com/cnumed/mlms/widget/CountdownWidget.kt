@@ -16,6 +16,7 @@ import androidx.work.WorkManager
 import androidx.work.workDataOf
 import com.cnumed.mlms.R
 import com.cnumed.mlms.util.ClassColorPrefs
+import com.cnumed.mlms.util.ClassFilter
 import com.cnumed.mlms.util.AppLog
 import org.json.JSONArray
 import java.time.LocalDate
@@ -120,8 +121,7 @@ abstract class CountdownWidget : AppWidgetProvider() {
         /** widget_cache의 모든 주차(week_classes_*)에서 시험 과목만 모은다. */
         private fun loadAllExams(context: Context): List<ExamClass> {
             val prefs = context.getSharedPreferences(PREFS_WIDGET, Context.MODE_PRIVATE)
-            val classPrefs = context.getSharedPreferences("class_settings", Context.MODE_PRIVATE)
-            val selectedClass = classPrefs.getString("selected_class", "A") ?: "A"
+            val selectedClass = ClassFilter.selectedClass(context)
 
             val result = mutableListOf<ExamClass>()
             for ((key, value) in prefs.all) {
@@ -134,7 +134,7 @@ abstract class CountdownWidget : AppWidgetProvider() {
                         val title = obj.optString("title")
                         if (isCoursePeriodBanner(title, obj.optString("professor"))) continue
                         if (!isExamClass(title)) continue
-                        if (!matchesSelectedClass(title, selectedClass)) continue
+                        if (!ClassFilter.matches(title, selectedClass)) continue
                         result.add(
                             ExamClass(
                                 title = title,
@@ -234,18 +234,6 @@ abstract class CountdownWidget : AppWidgetProvider() {
             }
             blocks.add(start to prev)
             return blocks
-        }
-
-        /** TimetableWidget과 동일한 A/B반 필터 규칙. */
-        private fun matchesSelectedClass(title: String, selectedClass: String): Boolean {
-            if (selectedClass == "ALL") return true
-            val t = title.uppercase()
-            return when {
-                "AB" in t || "AB 반" in t || "A/B" in t -> true
-                "A반" in t || "A 반" in t -> selectedClass == "A"
-                "B반" in t || "B 반" in t -> selectedClass == "B"
-                else -> true
-            }
         }
 
         /** true = 캐시에 시험 데이터가 하나라도 있음(즉 캐시가 채워짐). */

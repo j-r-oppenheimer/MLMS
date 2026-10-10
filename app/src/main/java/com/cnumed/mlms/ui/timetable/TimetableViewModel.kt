@@ -4,6 +4,7 @@ import android.appwidget.AppWidgetManager
 import android.content.ComponentName
 import android.content.Context
 import com.cnumed.mlms.util.AppLog
+import com.cnumed.mlms.util.ClassFilter
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.cnumed.mlms.data.repository.TimetableRepository
@@ -50,20 +51,8 @@ class TimetableViewModel @Inject constructor(
     }
 
     private fun filterClasses(classes: List<ClassItem>): List<ClassItem> {
-        val prefs = context.getSharedPreferences("class_settings", Context.MODE_PRIVATE)
-        val selectedClass = prefs.getString("selected_class", "ALL") ?: "ALL"
-
-        if (selectedClass == "ALL") return classes
-
-        return classes.filter { cls ->
-            val title = cls.title.uppercase()
-            when {
-                "AB" in title || "AB 반" in title || "A/B" in title -> true
-                "A반" in title || "A 반" in title -> selectedClass == "A"
-                "B반" in title || "B 반" in title -> selectedClass == "B"
-                else -> true
-            }
-        }
+        val selectedClass = ClassFilter.selectedClass(context)
+        return classes.filter { ClassFilter.matches(it.title, selectedClass) }
     }
 
     fun loadWeek(weekStart: LocalDate) {
