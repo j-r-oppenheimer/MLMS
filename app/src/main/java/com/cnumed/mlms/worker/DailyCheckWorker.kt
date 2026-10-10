@@ -4,6 +4,8 @@ import com.cnumed.mlms.util.AppLog
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.Intent
 import android.content.Context
 import android.os.Build
 import androidx.core.app.NotificationCompat
@@ -14,6 +16,7 @@ import androidx.work.*
 import com.cnumed.mlms.data.repository.NoticeRepository
 import com.cnumed.mlms.data.repository.TimetableRepository
 import com.cnumed.mlms.domain.model.ClassItem
+import com.cnumed.mlms.ui.main.MainActivity
 import com.cnumed.mlms.util.DateUtils
 import com.cnumed.mlms.widget.TimetableWidget
 import com.cnumed.mlms.widget.TimetableWidgetUpdateWorker
@@ -92,7 +95,8 @@ class DailyCheckWorker @AssistedInject constructor(
         val oldIds = noticeRepository.getNoticeIds()
 
         val result = noticeRepository.fetchNotices()
-        if (result.isSuccess) {
+        // 처음 받아오는 경우엔 기존 공지가 전부 '새 공지'가 되므로 저장만 한다
+        if (result.isSuccess && oldIds.isNotEmpty()) {
             result.getOrDefault(emptyList())
                 .filter { it.id !in oldIds }
                 .forEachIndexed { idx, notice ->
@@ -110,6 +114,13 @@ class DailyCheckWorker @AssistedInject constructor(
 
     private fun notify(id: Int, channel: String, title: String, body: String) {
         val nm = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val contentIntent = PendingIntent.getActivity(
+            applicationContext,
+            0,
+            Intent(applicationContext, MainActivity::class.java)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+        )
         val notification = NotificationCompat.Builder(applicationContext, channel)
             .setSmallIcon(com.cnumed.mlms.R.drawable.ic_notification)
             .setColor(0xFF7787A1.toInt())
@@ -117,6 +128,7 @@ class DailyCheckWorker @AssistedInject constructor(
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setContentIntent(contentIntent)
             .setAutoCancel(true)
             .build()
         nm.notify(id, notification)
