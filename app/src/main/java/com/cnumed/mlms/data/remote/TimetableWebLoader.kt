@@ -27,9 +27,10 @@ class TimetableWebLoader @Inject constructor(
     /**
      * WebView에서 FullCalendar가 보유한 **전체** clientEvents를 추출.
      * 날짜 필터 없이 모든 이벤트를 반환하므로 한 번 호출로 여러 주차 데이터를 얻을 수 있음.
+     * 타임아웃·캘린더 미발견·JS 오류는 null (빈 주의 "[]"와 구분).
      */
     @SuppressLint("SetJavaScriptEnabled")
-    suspend fun loadAllEvents(): String =
+    suspend fun loadAllEvents(): String? =
         suspendCancellableCoroutine { cont ->
             Handler(Looper.getMainLooper()).post {
                 var settled = false
@@ -53,7 +54,7 @@ class TimetableWebLoader @Inject constructor(
 
                 val mainHandler = Handler(Looper.getMainLooper())
 
-                fun resolve(json: String) {
+                fun resolve(json: String?) {
                     if (!settled) {
                         settled = true
                         webView.destroy()
@@ -63,7 +64,7 @@ class TimetableWebLoader @Inject constructor(
 
                 val timeoutRunnable = Runnable {
                     AppLog.w(TAG, "TimetableWebLoader timeout")
-                    resolve("[]")
+                    resolve(null)
                 }
                 mainHandler.postDelayed(timeoutRunnable, 35_000)
 
@@ -79,9 +80,9 @@ class TimetableWebLoader @Inject constructor(
                     (function() {
                         try {
                             var fcEl = document.querySelector('.fc');
-                            if (!fcEl) return [];
+                            if (!fcEl) return null;
                             var jq = window.jQuery || window.${'$'};
-                            if (!jq) return [];
+                            if (!jq) return null;
                             var events = jq(fcEl).fullCalendar('clientEvents');
                             if (!events || events.length === 0) return [];
                             return events
@@ -95,14 +96,14 @@ class TimetableWebLoader @Inject constructor(
                                     };
                                 });
                         } catch(ex) {
-                            return [{error: String(ex)}];
+                            return null;
                         }
                     })()
                     """.trimIndent()
 
                     webView.evaluateJavascript(js) { result ->
                         AppLog.d(TAG, "All events JS result (${result?.length}): ${result?.take(300)}")
-                        resolve(result ?: "[]")
+                        resolve(result?.takeUnless { it == "null" })
                     }
                 }
 

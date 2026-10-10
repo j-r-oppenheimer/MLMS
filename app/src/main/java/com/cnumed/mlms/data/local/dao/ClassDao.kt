@@ -21,6 +21,14 @@ interface ClassDao {
     @Query("DELETE FROM classes WHERE weekStart = :weekStart")
     suspend fun deleteByWeek(weekStart: String)
 
+    @Transaction
+    suspend fun replaceWeeks(byWeek: Map<String, List<ClassEntity>>) {
+        for ((week, classes) in byWeek) {
+            deleteByWeek(week)
+            insertAll(classes)
+        }
+    }
+
     @Query("SELECT * FROM classes ORDER BY date, startTime LIMIT 1")
     suspend fun getNextClass(): ClassEntity?
 }

@@ -17,6 +17,8 @@ import com.cnumed.mlms.domain.model.LessonFile
 import com.cnumed.mlms.widget.TimetableWidgetUpdateWorker
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import android.net.Uri
@@ -42,6 +44,9 @@ class TimetableRepository @Inject constructor(
     private var cachedRangeMin: LocalDate? = null
     private var cachedRangeMax: LocalDate? = null
 
+    // 앱·위젯·워커의 동시 fetch가 서로의 DB 교체와 겹치지 않도록 직렬화
+    private val fetchMutex = Mutex()
+
     fun getClassesForWeek(weekStart: LocalDate): Flow<List<ClassItem>> =
         classDao.getClassesByWeek(weekStart.toString())
             .map { list -> list.map { it.toDomain() } }
@@ -63,8 +68,8 @@ class TimetableRepository @Inject constructor(
         cachedRangeMax = null
     }
 
-    suspend fun fetchWeek(weekStart: LocalDate): Result<List<ClassItem>> {
-        return try {
+    suspend fun fetchWeek(weekStart: LocalDate): Result<List<ClassItem>> = fetchMutex.withLock {
+        try {
             // 캐시 범위 안이면 DB에서 바로 반환
             if (isWeekCached(weekStart)) {
                 AppLog.d(TAG, "Week $weekStart in cached range — using DB")
@@ -73,15 +78,16 @@ class TimetableRepository @Inject constructor(
                 // 캐시 범위 안이면 수업이 0개여도 '확인된 빈 주(방학)' — 위젯 캐시에도
                 // 빈 배열로 기록해 위젯이 로딩 상태로 남지 않게 한다.
                 TimetableWidgetUpdateWorker.saveClassesToCache(context, weekStart, cached)
-                return Result.success(cached)
+                return@withLock Result.success(cached)
             }
 
             if (!sessionManager.ensureSession()) {
-                return Result.failure(Exception("로그인이 필요합니다"))
+                return@withLock Result.failure(Exception("로그인이 필요합니다"))
             }
 
             // WebView에서 FullCalendar 전체 이벤트 한 번에 추출
             val json = webLoader.loadAllEvents()
+                ?: return@withLock Result.failure(Exception("시간표를 불러오지 못했습니다"))
             AppLog.d(TAG, "WebView all events len=${json.length} | preview=${json.take(300)}")
 
             val allClasses = parser.parseAllTimetableJson(json)
@@ -89,14 +95,15 @@ class TimetableRepository @Inject constructor(
 
             if (allClasses.isEmpty()) {
                 AppLog.d(TAG, "Empty result — no classes loaded from calendar")
-                return Result.success(emptyList())
+                return@withLock Result.success(emptyList())
             }
 
             // 주차별 그룹핑 → DB + 위젯 SharedPreferences에 일괄 저장
             val byWeek = allClasses.groupBy { it.weekStart }
+            classDao.replaceWeeks(byWeek.entries.associate { (week, classes) ->
+                week.toString() to classes.map { ClassEntity.fromDomain(it) }
+            })
             for ((week, classes) in byWeek) {
-                classDao.deleteByWeek(week.toString())
-                classDao.insertAll(classes.map { ClassEntity.fromDomain(it) })
                 TimetableWidgetUpdateWorker.saveClassesToCache(context, week, classes)
             }
 
@@ -114,6 +121,8 @@ class TimetableRepository @Inject constructor(
                 TimetableWidgetUpdateWorker.saveClassesToCache(context, weekStart, emptyList())
             }
             Result.success(weekClasses)
+        } catch (e: kotlin.coroutines.cancellation.CancellationException) {
+            throw e
         } catch (e: Exception) {
             AppLog.e(TAG, "fetchWeek failed", e)
             Result.failure(e)
