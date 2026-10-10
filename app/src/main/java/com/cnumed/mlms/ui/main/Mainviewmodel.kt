@@ -6,7 +6,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.cnumed.mlms.data.remote.LoginResult
 import com.cnumed.mlms.data.remote.SessionManager
-import com.cnumed.mlms.util.SecurePrefs
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -23,8 +22,7 @@ sealed class MainLoginState {
 
 @HiltViewModel
 class MainViewModel @Inject constructor(
-    private val sessionManager: SessionManager,
-    private val securePrefs: SecurePrefs
+    private val sessionManager: SessionManager
 ) : ViewModel() {
 
     private val _loginState = MutableStateFlow<MainLoginState>(MainLoginState.Checking)
@@ -36,33 +34,16 @@ class MainViewModel @Inject constructor(
 
     private fun attemptBackgroundLogin() {
         viewModelScope.launch {
-            // 1. 기존 세션이 아직 유효한지 확인
-            if (sessionManager.isSessionValid()) {
-                AppLog.d(TAG, "Existing session valid")
-                _loginState.value = MainLoginState.LoggedIn
-                return@launch
-            }
-
-            // 2. 저장된 자격증명이 있으면 로그인 시도
-            val id = securePrefs.getId()
-            val pwd = securePrefs.getPassword()
-
-            if (id != null && pwd != null) {
-                AppLog.d(TAG, "Session expired, auto re-login for user=$id")
-                val result = sessionManager.login(id, pwd)
-                _loginState.value = when (result) {
-                    is LoginResult.Success -> {
-                        AppLog.d(TAG, "Auto re-login success")
-                        MainLoginState.LoggedIn
-                    }
-                    is LoginResult.Failure -> {
-                        AppLog.w(TAG, "Auto re-login failed: ${result.message}")
-                        MainLoginState.LoginFailed(result.message)
-                    }
+            _loginState.value = when (val result = sessionManager.restoreSession()) {
+                null -> {
+                    AppLog.d(TAG, "No saved credentials — need login")
+                    MainLoginState.NeedCredentials
                 }
-            } else {
-                AppLog.d(TAG, "No saved credentials — need login")
-                _loginState.value = MainLoginState.NeedCredentials
+                is LoginResult.Success -> MainLoginState.LoggedIn
+                is LoginResult.Failure -> {
+                    AppLog.w(TAG, "Auto re-login failed: ${result.message}")
+                    MainLoginState.LoginFailed(result.message)
+                }
             }
         }
     }
