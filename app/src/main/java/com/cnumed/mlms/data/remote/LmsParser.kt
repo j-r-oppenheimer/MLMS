@@ -3,8 +3,6 @@ package com.cnumed.mlms.data.remote
 import com.cnumed.mlms.util.AppLog
 
 import com.cnumed.mlms.domain.model.ClassItem
-import com.cnumed.mlms.domain.model.LessonDetail
-import com.cnumed.mlms.domain.model.LessonFile
 import com.cnumed.mlms.domain.model.Notice
 import com.cnumed.mlms.util.DateUtils
 import org.json.JSONArray
@@ -12,11 +10,9 @@ import org.json.JSONObject
 import org.jsoup.Jsoup
 import java.time.LocalDate
 import java.time.LocalTime
-import java.net.URLEncoder
 import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlin.math.abs
 
 @Singleton
 class LmsParser @Inject constructor() {
@@ -171,151 +167,8 @@ class LmsParser @Inject constructor() {
     }
 
     // ──────────────────────────────────────────────
-    // 시간표 파싱 (HTML 또는 JSON 자동 감지)
+    // 시간표 파싱
     // ──────────────────────────────────────────────
-    fun parseTimetable(html: String, weekStart: LocalDate): List<ClassItem> {
-        val trimmed = html.trimStart()
-        if (trimmed.startsWith("[") || trimmed.startsWith("{")) {
-            return parseTimetableJson(html, weekStart)
-        }
-        return parseTimetableHtml(html, weekStart)
-    }
-
-    private fun parseTimetableHtml(html: String, weekStart: LocalDate): List<ClassItem> {
-        val doc = Jsoup.parse(html)
-        val classes = mutableListOf<ClassItem>()
-
-        // === 1. 날짜 목록 수집 ===
-        // FullCalendar v3: th.fc-day-header[data-date] 또는 td.fc-day[data-date]
-        val dayDates: List<String> = run {
-            // th[data-date]
-            var dates = doc.select("th[data-date]")
-                .map { it.attr("data-date") }.filter { it.isNotEmpty() }
-            if (dates.isNotEmpty()) return@run dates
-
-            // td[data-date] (fc-bg 테이블)
-            dates = doc.select("td[data-date]")
-                .map { it.attr("data-date") }.filter { it.isNotEmpty() }.distinct().sorted()
-            if (dates.isNotEmpty()) return@run dates
-
-            // 전체 [data-date]
-            dates = doc.select("[data-date]")
-                .map { it.attr("data-date") }.filter { it.isNotEmpty() }.distinct().sorted()
-            if (dates.isNotEmpty()) return@run dates
-
-            // 없으면 weekStart 기준 일~토 7일 생성 (컬럼 인덱스 매핑용)
-            AppLog.w("LmsParser", "No data-date found; fallback to weekStart=$weekStart")
-            (0..6).map { weekStart.plusDays(it.toLong()).toString() }
-        }
-        AppLog.d("LmsParser", "dayDates=$dayDates")
-
-        // === 2. 이벤트 파싱 ===
-        // ".fc-content:has(.fc-time):has(.fc-title)" → 이 LMS의 이벤트 컨텐츠 구조
-        val eventDivs = doc.select(".fc-content:has(.fc-time):has(.fc-title)")
-        AppLog.d("LmsParser", "fc-content events: ${eventDivs.size}")
-
-        for (eventDiv in eventDivs) {
-            try {
-                val timeEl = eventDiv.select(".fc-time").firstOrNull() ?: continue
-                val titleText = eventDiv.select(".fc-title").firstOrNull()
-                    ?.text()?.trim()?.takeIf { it.isNotEmpty() } ?: continue
-                val timeText = timeEl.attr("data-full")
-                    .ifEmpty { timeEl.text() }.takeIf { it.isNotEmpty() } ?: continue
-
-                // 날짜 결정: ① 부모 경로의 data-date ② td 컬럼 인덱스 ③ CSS left% ④ 진단 로그
-                val dateStr: String = run {
-                    // ① 부모에 data-date 속성 있으면 사용
-                    val fromParent = eventDiv.parents()
-                        .firstOrNull { it.hasAttr("data-date") }?.attr("data-date")
-                    if (!fromParent.isNullOrEmpty()) return@run fromParent
-
-                    // ② 부모 td의 형제 중 fc-axis 제외 인덱스
-                    val parentTd = eventDiv.parents().firstOrNull { it.tagName() == "td" }
-                    if (parentTd != null) {
-                        val siblings = parentTd.parent()?.select("td:not(.fc-axis)")
-                            ?: org.jsoup.select.Elements()
-                        val colIdx = siblings.indexOf(parentTd)
-                        val mapped = if (colIdx >= 0) dayDates.getOrNull(colIdx) else null
-                        if (!mapped.isNullOrEmpty()) return@run mapped
-                    }
-
-                    // ③ CSS left:X% 로 컬럼 인덱스 추정 (FullCalendar CSS 레이아웃 방식)
-                    val styledParent = eventDiv.parents()
-                        .firstOrNull { it.attr("style").contains("left:") || it.attr("style").contains("left :") }
-                    if (styledParent != null) {
-                        val leftMatch = Regex("""left\s*:\s*([\d.]+)%""").find(styledParent.attr("style"))
-                        val leftPct = leftMatch?.groupValues?.get(1)?.toDoubleOrNull()
-                        if (leftPct != null && dayDates.isNotEmpty()) {
-                            val colIdx = (leftPct / (100.0 / dayDates.size)).toInt()
-                                .coerceIn(0, dayDates.size - 1)
-                            return@run dayDates[colIdx]
-                        }
-                    }
-
-                    // ④ 진단: 부모 체인 로깅
-                    val chain = eventDiv.parents().take(5)
-                        .joinToString(" > ") { "${it.tagName()}.${it.className().take(20)}" }
-                    AppLog.w("LmsParser", "No date for '$titleText' | parent chain: $chain")
-                    "" // 결정 불가
-                }
-
-                if (dateStr.isEmpty()) {
-                    AppLog.w("LmsParser", "No date for: $titleText | $timeText")
-                    continue
-                }
-
-                val date = try { LocalDate.parse(dateStr) } catch (_: Exception) { continue }
-                val (startTime, endTime) = parseTimeRange(timeText) ?: continue
-                val (title, professor) = parseTitleProfessor(titleText)
-
-                AppLog.d("LmsParser", "[$dateStr] $title | $timeText")
-                classes.add(ClassItem(
-                    title = title, professor = professor,
-                    dayOfWeek = date.dayOfWeek.value,
-                    date = date,
-                    startTime = startTime, endTime = endTime,
-                    weekStart = weekStart
-                ))
-            } catch (_: Exception) { }
-        }
-
-        AppLog.d("LmsParser", "Total from HTML: ${classes.size}")
-        return classes
-    }
-
-    /** HTML에서 FullCalendar가 현재 표시 중인 주의 첫째 날 반환 */
-    fun extractDisplayedWeekStart(html: String): LocalDate? {
-        val doc = Jsoup.parse(html)
-
-        // 1. 모든 [data-date] 요소
-        doc.select("[data-date]").firstOrNull()?.attr("data-date")?.let {
-            try { return LocalDate.parse(it) } catch (_: Exception) { }
-        }
-
-        // 2. h2 텍스트 파싱: "2026년 3월 1 – 7일", "2026년 2월 22 – 28일"
-        doc.select("h2").forEach { h2 ->
-            val text = h2.text()
-            AppLog.d("LmsParser", "h2 candidate: $text")
-            val m = Regex("""(\d{4})년\s*(\d{1,2})월\s*(\d{1,2})""").find(text) ?: return@forEach
-            try {
-                return LocalDate.of(
-                    m.groupValues[1].toInt(),
-                    m.groupValues[2].toInt(),
-                    m.groupValues[3].toInt()
-                )
-            } catch (_: Exception) { }
-        }
-
-        return null
-    }
-
-    private fun parseTimetableJson(json: String, weekStart: LocalDate): List<ClassItem> {
-        return parseAllTimetableJson(json).filter {
-            val weekEnd = weekStart.plusDays(6)
-            it.date in weekStart..weekEnd
-        }.map { it.copy(weekStart = weekStart) }
-    }
-
     /**
      * 전체 이벤트를 주차 필터 없이 파싱. 각 이벤트의 weekStart는 날짜에서 자동 계산.
      */
@@ -374,68 +227,6 @@ class LmsParser @Inject constructor() {
     }
 
     // ──────────────────────────────────────────────
-    // 수업 자료 파싱
-    // ──────────────────────────────────────────────
-    fun parseLessonDetail(html: String): LessonDetail {
-        val doc = Jsoup.parse(html, LmsApi.BASE_URL)
-
-        // 과목명
-        val subjectEl = doc.selectFirst("#subject")
-        val subject = subjectEl?.ownText()?.trim() ?: ""
-        val subjectFinal = subject.ifEmpty {
-            subjectEl?.textNodes()?.firstOrNull()?.text()?.trim() ?: ""
-        }
-
-        // 강의실
-        var room = ""
-        val listItems = doc.select("ul.content-list li")
-        for (li in listItems) {
-            val text = li.text().trim()
-            if (text.isNotEmpty() && !text.contains("교시") && !text.contains("~")
-                && text != "강의" && text != "실습" && text != "세미나" && text != "시험") {
-                room = text
-                break
-            }
-        }
-
-        // 첨부파일
-        val files = mutableListOf<LessonFile>()
-        val attachRegex = Regex("""attachEvent\s*\(\s*'[^']*'\s*,\s*'([^']+)'\s*,\s*'([^']+)'""")
-
-        doc.select("[onclick*=attachEvent]").forEach { el ->
-            val match = attachRegex.find(el.attr("onclick")) ?: return@forEach
-            files.add(LessonFile(match.groupValues[2], buildDownloadUrl(match.groupValues[1], match.groupValues[2])))
-        }
-        if (files.isEmpty()) {
-            doc.select("#lesson_plan_data a").forEach { a ->
-                val match = attachRegex.find(a.attr("onclick")) ?: return@forEach
-                files.add(LessonFile(match.groupValues[2], buildDownloadUrl(match.groupValues[1], match.groupValues[2])))
-            }
-        }
-        if (files.isEmpty()) {
-            val scripts = doc.select("script:not([src])").joinToString("\n") { it.data() }
-            attachRegex.findAll(scripts).forEach { match ->
-                files.add(LessonFile(match.groupValues[2], buildDownloadUrl(match.groupValues[1], match.groupValues[2])))
-            }
-        }
-        if (files.isEmpty()) {
-            doc.select("a[href*=/file/download]").forEach { a ->
-                val href = a.attr("abs:href")
-                val name = a.text().trim().ifEmpty { "첨부파일" }
-                if (href.isNotEmpty()) files.add(LessonFile(name, href))
-            }
-        }
-
-        return LessonDetail(subject = subjectFinal, room = room, files = files)
-    }
-
-    private fun buildDownloadUrl(filePath: String, fileName: String): String {
-        val encodedPath = URLEncoder.encode(filePath, "UTF-8")
-        val encodedName = URLEncoder.encode(fileName, "UTF-8")
-        return "${LmsApi.BASE_URL}/file/download?file_path=$encodedPath&file_name=$encodedName"
-    }
-
-    // ──────────────────────────────────────────────
     // 유틸리티
     // ──────────────────────────────────────────────
     private fun parseTitleProfessor(text: String): Pair<String, String> {
@@ -445,119 +236,6 @@ class LmsParser @Inject constructor() {
         } else {
             Pair(text.trim(), "")
         }
-    }
-
-    private fun parseTimeRange(timeText: String): Pair<LocalTime, LocalTime>? {
-        val cleaned = timeText
-            .replace("오전", "AM")
-            .replace("오후", "PM")
-            .replace("~", " - ")
-            .replace("–", " - ")
-
-        val parts = cleaned.split(" - ", " ~ ").map { it.trim() }
-        if (parts.size < 2) return null
-
-        val start = parseTime(parts[0]) ?: return null
-        val end = parseTime(parts[1]) ?: return null
-        return Pair(start, end)
-    }
-
-    private fun parseTime(s: String): LocalTime? = try {
-        val t = s.trim()
-        when {
-            t.contains("AM", ignoreCase = true) -> {
-                val parts = t.replace("AM", "", ignoreCase = true).trim().split(":")
-                val h = parts[0].toInt().let { if (it == 12) 0 else it }
-                LocalTime.of(h, parts[1].toInt())
-            }
-            t.contains("PM", ignoreCase = true) -> {
-                val parts = t.replace("PM", "", ignoreCase = true).trim().split(":")
-                val h = parts[0].toInt().let { if (it == 12) 12 else it + 12 }
-                LocalTime.of(h, parts[1].toInt())
-            }
-            else -> {
-                val parts = t.split(":")
-                LocalTime.of(parts[0].toInt(), parts[1].toInt())
-            }
-        }
-    } catch (_: Exception) { null }
-
-    fun extractCsrfToken(html: String): String? {
-        val doc = Jsoup.parse(html)
-        return doc.select("input[name=_csrf], input[name=csrf_token], input[name=_token], meta[name=_csrf]")
-            .firstOrNull()
-            ?.let {
-                if (it.tagName() == "meta") it.attr("content") else it.attr("value")
-            }
-            ?.takeIf { it.isNotEmpty() }
-    }
-
-    /**
-     * 로그인 폼의 action URL과 모든 hidden 필드를 추출.
-     * 서버에 따라 POST 엔드포인트가 /login 이 아닐 수 있음.
-     */
-    fun extractLoginForm(html: String): LoginFormData {
-        val doc = Jsoup.parse(html, LmsApi.BASE_URL)
-
-        // id/pwd input이 있는 폼 우선, 없으면 첫 번째 POST 폼
-        val form = doc.select("form").firstOrNull { f ->
-            f.select("input[name=id], input[name=pwd], input[name=username], input[name=password]").isNotEmpty()
-        } ?: doc.select("form[method~=(?i)post]").firstOrNull()
-
-        val action = form?.attr("abs:action")
-            ?.takeIf { it.isNotEmpty() }
-            ?: LmsApi.LOGIN_URL
-
-        val idField = form?.select("input[name=id], input[name=username]")
-            ?.firstOrNull()?.attr("name") ?: "id"
-        val pwdField = form?.select("input[name=pwd], input[name=password]")
-            ?.firstOrNull()?.attr("name") ?: "pwd"
-
-        val hiddenFields = form?.select("input[type=hidden]")
-            ?.associate { it.attr("name") to it.attr("value") }
-            ?: emptyMap()
-
-        return LoginFormData(action, idField, pwdField, hiddenFields)
-    }
-
-    data class LoginFormData(
-        val actionUrl: String,
-        val idFieldName: String,
-        val pwdFieldName: String,
-        val hiddenFields: Map<String, String>
-    )
-
-    /**
-     * FullCalendar 설정에서 events 피드 URL 추출.
-     * 한국 LMS에서 흔히 쓰이는 패턴들을 모두 시도함.
-     */
-    fun extractCalendarEventsUrl(html: String): String? {
-        // <script> 태그 내용만 추출해서 탐색
-        val doc = Jsoup.parse(html)
-        val scriptContent = doc.select("script:not([src])").joinToString("\n") { it.data() }
-
-        AppLog.d("LmsParser", "Script length: ${scriptContent.length}")
-        // script 내 /aca/ 경로 있는 URL 힌트 출력
-        Regex("""['"]([/][^'"]{3,60})['"]""").findAll(scriptContent)
-            .map { it.groupValues[1] }
-            .filter { it.contains("aca") || it.contains("schedule") || it.contains("calendar") || it.contains("event") }
-            .distinct()
-            .forEach { AppLog.d("LmsParser", "JS URL hint: $it") }
-
-        val patterns = listOf(
-            // events: { url: '/path' }
-            Regex("""events\s*:\s*\{[^}]*url\s*:\s*['"]([^'"]+)['"]"""),
-            // events: '/path'
-            Regex("""events\s*:\s*['"]([/][^'"]+)['"]"""),
-            // url: '/aca/...schedule...' 또는 '/aca/...cal...'
-            Regex("""url\s*:\s*['"]([/][^'"]*(?:schedule|calendar|event|sched|cal)[^'"]*)['"]""", RegexOption.IGNORE_CASE),
-            // $.ajax({ url: '/path' })
-            Regex("""ajax\s*\(\s*\{[^}]*url\s*:\s*['"]([/][^'"]+)['"]"""),
-        )
-        for (p in patterns) {
-            p.find(scriptContent)?.groupValues?.get(1)?.let { return it }
-        }
-        return null
     }
 
     private fun parseDate(text: String): LocalDate? {
