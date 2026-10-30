@@ -118,6 +118,13 @@ class TimetableWidget : AppWidgetProvider() {
                 .remove(KEY_LAST_FULL_FETCH).apply()
         }
 
+        fun clearWeekCaches(context: Context) {
+            val prefs = context.getSharedPreferences(PREFS_WIDGET, Context.MODE_PRIVATE)
+            val editor = prefs.edit()
+            prefs.all.keys.filter { it.startsWith("week_classes_") }.forEach { editor.remove(it) }
+            editor.apply()
+        }
+
         fun markFailed(prefs: android.content.SharedPreferences, weekStart: LocalDate) {
             prefs.edit().putBoolean("$KEY_FAILED_PREFIX$weekStart", true).apply()
         }
