@@ -14,6 +14,8 @@ import com.cnumed.mlms.data.remote.TimetableWebLoader
 import com.cnumed.mlms.domain.model.ClassItem
 import com.cnumed.mlms.domain.model.LessonDetail
 import com.cnumed.mlms.domain.model.LessonFile
+import com.cnumed.mlms.widget.CountdownWidget
+import com.cnumed.mlms.widget.TimetableWidget
 import com.cnumed.mlms.widget.TimetableWidgetUpdateWorker
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -55,8 +57,13 @@ class TimetableRepository @Inject constructor(
         classDao.getClassesByDate(LocalDate.now().toString())
             .map { list -> list.map { it.toDomain() } }
 
-    /** 캐시 범위 안이면 true (해당 주에 수업이 0개여도 이미 확인된 것) */
+    /**
+     * 캐시 범위 안이거나 직전에 전체 달력을 성공적으로 받아왔으면 true
+     * (해당 주에 수업이 0개여도 이미 확인된 것 — 범위 밖의 빈 주도 다시 받지 않는다)
+     */
     fun isWeekCached(weekStart: LocalDate): Boolean {
+        val prefs = context.getSharedPreferences(TimetableWidget.PREFS_WIDGET, Context.MODE_PRIVATE)
+        if (TimetableWidget.isFullFetchFresh(prefs)) return true
         val min = cachedRangeMin ?: return false
         val max = cachedRangeMax ?: return false
         return weekStart in min..max
@@ -66,6 +73,7 @@ class TimetableRepository @Inject constructor(
     fun invalidateCache() {
         cachedRangeMin = null
         cachedRangeMax = null
+        TimetableWidget.clearFullFetch(context)
     }
 
     suspend fun fetchWeek(weekStart: LocalDate): Result<List<ClassItem>> = fetchMutex.withLock {
@@ -120,6 +128,12 @@ class TimetableRepository @Inject constructor(
             if (weekClasses.isEmpty()) {
                 TimetableWidgetUpdateWorker.saveClassesToCache(context, weekStart, emptyList())
             }
+            TimetableWidget.markFullFetch(context)
+
+            // 위젯이 보고 있는 주가 이번에 요청한 주와 달라도 새 캐시로 다시 그린다
+            // (앱에서 받아온 뒤에도 위젯이 로딩 화면에 남아 있지 않게).
+            TimetableWidget.refreshAll(context)
+            CountdownWidget.refreshAll(context)
             Result.success(weekClasses)
         } catch (e: kotlin.coroutines.cancellation.CancellationException) {
             throw e

@@ -53,6 +53,10 @@ class TimetableWidget : AppWidgetProvider() {
                 prefs.edit().putInt(KEY_WEEK_OFFSET, prefs.getInt(KEY_WEEK_OFFSET, 0) + 1).apply()
                 refreshAll(context)
             }
+            ACTION_RETRY -> {
+                clearFailures(prefs)
+                refreshAll(context)
+            }
         }
     }
 
@@ -62,6 +66,8 @@ class TimetableWidget : AppWidgetProvider() {
         const val ACTION_NEXT_WEEK = "com.cnumed.mlms.WIDGET_NEXT_WEEK"
         // 핸들러 없는 영역 탭 시 런처가 앱을 여는 기본 동작(One UI 8.5 등)을 막기 위한 무동작 인텐트
         const val ACTION_NOOP      = "com.cnumed.mlms.WIDGET_NOOP"
+        // 불러오기 실패 화면을 탭하면 다시 시도
+        const val ACTION_RETRY     = "com.cnumed.mlms.WIDGET_RETRY"
         const val PREFS_WIDGET     = "widget_cache"
 
         // 글씨 크기 감쇠: SIZE_DAMP<1 이면 위젯 크기 변화에 덜 민감. pivot 부근은 기존과 동일.
@@ -78,6 +84,10 @@ class TimetableWidget : AppWidgetProvider() {
         const val KEY_BLOCK_ALPHA  = "widget_block_alpha"
         const val KEY_DARK_MODE    = "widget_dark_mode"
         const val KEY_TEXT_SIZE    = "widget_text_size"
+        // 전체 달력을 마지막으로 성공적으로 받아온 시각(epoch ms). 다음 정기 갱신(매일 6시)
+        // 전까지는 캐시에 없는 주를 "수업 없는 주"로 보고 다시 받아오지 않는다.
+        private const val KEY_LAST_FULL_FETCH = "last_full_fetch"
+        private const val KEY_FAILED_PREFIX = "week_failed_"
 
         data class WidgetClass(
             val title: String,
@@ -88,7 +98,37 @@ class TimetableWidget : AppWidgetProvider() {
             val endTime: LocalTime
         )
 
-        private fun refreshAll(context: Context) {
+        fun isFullFetchFresh(prefs: android.content.SharedPreferences): Boolean {
+            val last = prefs.getLong(KEY_LAST_FULL_FETCH, 0L)
+            val now = java.time.LocalDateTime.now()
+            val todayRefresh = now.toLocalDate().atTime(TimetableWidgetUpdateWorker.DAILY_REFRESH_TIME)
+            val lastRefresh = if (now.isBefore(todayRefresh)) todayRefresh.minusDays(1) else todayRefresh
+            val lastRefreshMs = lastRefresh.atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli()
+            return last >= lastRefreshMs && last <= System.currentTimeMillis()
+        }
+
+        fun markFullFetch(context: Context) {
+            context.getSharedPreferences(PREFS_WIDGET, Context.MODE_PRIVATE).edit()
+                .putLong(KEY_LAST_FULL_FETCH, System.currentTimeMillis()).apply()
+        }
+
+        /** 새로고침 시: 다음 요청은 반드시 다시 받아오게 한다. */
+        fun clearFullFetch(context: Context) {
+            context.getSharedPreferences(PREFS_WIDGET, Context.MODE_PRIVATE).edit()
+                .remove(KEY_LAST_FULL_FETCH).apply()
+        }
+
+        fun markFailed(prefs: android.content.SharedPreferences, weekStart: LocalDate) {
+            prefs.edit().putBoolean("$KEY_FAILED_PREFIX$weekStart", true).apply()
+        }
+
+        private fun clearFailures(prefs: android.content.SharedPreferences) {
+            val editor = prefs.edit()
+            prefs.all.keys.filter { it.startsWith(KEY_FAILED_PREFIX) }.forEach { editor.remove(it) }
+            editor.apply()
+        }
+
+        fun refreshAll(context: Context) {
             val awm = AppWidgetManager.getInstance(context)
             val ids = awm.getAppWidgetIds(ComponentName(context, TimetableWidget::class.java))
             for (id in ids) updateWidget(context, awm, id)
@@ -120,7 +160,13 @@ class TimetableWidget : AppWidgetProvider() {
             val textSize   = prefs.getInt(KEY_TEXT_SIZE, 100)
 
             val weekStart = currentWeekSunday().plusWeeks(weekOffset.toLong())
-            val classes   = loadClasses(prefs, weekStart)  // null = 미캐시, list = 캐시됨
+            var classes   = loadClasses(prefs, weekStart)  // null = 미캐시, list = 캐시됨
+            // 직전에 전체 달력을 성공적으로 받아왔는데 이 주가 캐시에 없다면 수업 없는 주다.
+            if (classes == null && isFullFetchFresh(prefs)) {
+                prefs.edit().putString("week_classes_$weekStart", "[]").apply()
+                classes = emptyList()
+            }
+            val isFailed = classes == null && prefs.getBoolean("$KEY_FAILED_PREFIX$weekStart", false)
 
             val classPrefs = context.getSharedPreferences("class_settings", Context.MODE_PRIVATE)
             val selectedClass = ClassFilter.selectedClass(context)
@@ -137,13 +183,15 @@ class TimetableWidget : AppWidgetProvider() {
             val w = (maxW * density).toInt().coerceAtLeast(200)
             val h = (maxH * density).toInt().coerceAtLeast(140)
 
-            // null = 아직 캐시 없음 → 로딩 화면
+            // null = 아직 캐시 없음 → 로딩 화면 (불러오기에 실패했으면 실패 화면)
             // emptyList or classes with data = 캐시 있음 → 시간표 그리기 (빈 주도 그림)
-            val isLoading = (classes == null)
-            val bitmap = if (isLoading) {
-                drawLoadingBitmap(w, h, density, weekStart, isDarkMode, bgAlpha)
-            } else {
-                drawTimetable(w, h, density, weekStart, filteredClasses, isDarkMode, bgAlpha, textSize, customColorHex, blockAlpha, examHighlight, invertedKeys)
+            val isLoading = (classes == null && !isFailed)
+            val bitmap = when {
+                isFailed -> drawMessageBitmap(w, h, density, weekStart, isDarkMode, textSize,
+                    "시간표를 불러오지 못했어요", "탭해서 다시 시도")
+                isLoading -> drawMessageBitmap(w, h, density, weekStart, isDarkMode, textSize,
+                    "시간표 불러오는 중…", null)
+                else -> drawTimetable(w, h, density, weekStart, filteredClasses, isDarkMode, bgAlpha, textSize, customColorHex, blockAlpha, examHighlight, invertedKeys)
             }
 
             val prevPi = android.app.PendingIntent.getBroadcast(
@@ -160,6 +208,10 @@ class TimetableWidget : AppWidgetProvider() {
                 context, 3, Intent(ACTION_NOOP).setPackage(context.packageName),
                 android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
             )
+            val retryPi = android.app.PendingIntent.getBroadcast(
+                context, 4, Intent(ACTION_RETRY).setPackage(context.packageName),
+                android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
+            )
 
             // 카드 배경색(틴트)은 비트맵이 아니라 @android:id/background 뷰에 올린다.
             // One UI가 이 반투명 색 뒤 배경화면을 블러해 깔아주고, 모서리 곡률도 담당한다.
@@ -173,7 +225,7 @@ class TimetableWidget : AppWidgetProvider() {
             val views = RemoteViews(context.packageName, R.layout.widget_timetable).apply {
                 setImageViewBitmap(R.id.widget_image, bitmap)
                 setInt(android.R.id.background, "setBackgroundColor", tint)
-                setOnClickPendingIntent(android.R.id.background, noopPi)
+                setOnClickPendingIntent(android.R.id.background, if (isFailed) retryPi else noopPi)
                 setOnClickPendingIntent(R.id.widget_btn_prev, prevPi)
                 setOnClickPendingIntent(R.id.widget_btn_next, nextPi)
             }
@@ -281,13 +333,16 @@ class TimetableWidget : AppWidgetProvider() {
             } catch (_: Exception) { null }  // 파싱 오류 → 재시도
         }
 
-        private fun drawLoadingBitmap(
+        /** 시간표 대신 안내 문구(로딩 중 / 실패)와 주 범위를 가운데에 그린다. */
+        private fun drawMessageBitmap(
             width: Int,
             height: Int,
             density: Float,
             weekStart: LocalDate,
             isDarkMode: Boolean,
-            bgAlpha: Int
+            textSizeScale: Int,
+            message: String,
+            hint: String?
         ): Bitmap {
             // 투명 배경 — 카드 틴트/블러/곡률은 @android:id/background 뷰 + 런처가 담당.
             val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
@@ -297,22 +352,29 @@ class TimetableWidget : AppWidgetProvider() {
             val pivot = SIZE_PIVOT_DP * density
             val ref = pivot * Math.pow((rawRef / pivot).toDouble(), SIZE_DAMP).toFloat()
             val textColor = if (isDarkMode) Color.parseColor("#AAAAAA") else Color.parseColor("#666666")
+            val scale = textSizeScale.toFloat() / 100f
             val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = textColor
                 textAlign = Paint.Align.CENTER
-                textSize = ref * 0.0277f
+                textSize = ref * 0.045f * scale
             }
-            canvas.drawText("시간표 불러오는 중…", width / 2f, height / 2f, textPaint)
+            canvas.drawText(message, width / 2f, height / 2f, textPaint)
             val subPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = textColor
                 alpha = 160
                 textAlign = Paint.Align.CENTER
-                textSize = ref * 0.0198f
+                textSize = ref * 0.036f * scale
             }
             val monday = weekStart.plusDays(1)
             val sunday = weekStart.plusDays(7)
             val rangeText = "${monday.monthValue}/${monday.dayOfMonth} – ${sunday.monthValue}/${sunday.dayOfMonth}"
-            canvas.drawText(rangeText, width / 2f, height / 2f + height * 0.09f, subPaint)
+            val lineGap = subPaint.textSize * 1.8f
+            var y = height / 2f + lineGap
+            if (hint != null) {
+                canvas.drawText(hint, width / 2f, y, subPaint)
+                y += lineGap
+            }
+            canvas.drawText(rangeText, width / 2f, y, subPaint)
             return bitmap
         }
 

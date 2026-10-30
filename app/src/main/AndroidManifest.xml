@@ -46,6 +46,7 @@
                 <action android:name="com.cnumed.mlms.WIDGET_PREV_WEEK" />
                 <action android:name="com.cnumed.mlms.WIDGET_NEXT_WEEK" />
                 <action android:name="com.cnumed.mlms.WIDGET_NOOP" />
+                <action android:name="com.cnumed.mlms.WIDGET_RETRY" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"

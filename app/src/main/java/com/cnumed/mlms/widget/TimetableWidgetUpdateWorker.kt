@@ -54,16 +54,20 @@ class TimetableWidgetUpdateWorker @AssistedInject constructor(
             val weekStart = if (weekStartStr != null) LocalDate.parse(weekStartStr)
                             else DateUtils.getWeekStart()
 
+            val prefs = applicationContext.getSharedPreferences(
+                TimetableWidget.PREFS_WIDGET, Context.MODE_PRIVATE
+            )
+            // 정기 갱신은 캐시를 무시하고 전체 달력을 다시 받아온다.
+            if (weekStartStr == null) repository.invalidateCache()
             val result = repository.fetchWeek(weekStart)
             if (result.isSuccess) {
                 val classes = result.getOrDefault(emptyList())
                 // 빈 결과는 캐시에 쓰지 않음 — 로드 실패/세션 만료 시 기존 시간표 보존
-                if (classes.isNotEmpty()) {
-                    val prefs = applicationContext.getSharedPreferences(
-                        TimetableWidget.PREFS_WIDGET, Context.MODE_PRIVATE
-                    )
-                    saveWeekJson(prefs, weekStart, classes)
-                }
+                if (classes.isNotEmpty()) saveWeekJson(prefs, weekStart, classes)
+            }
+            // 위젯이 요청한 주인데 끝나고도 캐시가 없으면, 로딩 화면에 머물지 않게 실패로 표시한다.
+            if (weekStartStr != null && TimetableWidget.loadClasses(prefs, weekStart) == null) {
+                TimetableWidget.markFailed(prefs, weekStart)
             }
 
             // 위젯 갱신
@@ -101,6 +105,7 @@ class TimetableWidgetUpdateWorker @AssistedInject constructor(
 
     companion object {
         const val WORK_NAME = "widget_daily_update"
+        val DAILY_REFRESH_TIME: LocalTime = LocalTime.of(6, 0)
 
         /** Fragment 등 앱 내부에서 위젯 캐시를 즉시 갱신할 때 사용 */
         fun saveClassesToCache(context: Context, weekStart: LocalDate, classes: List<ClassItem>) {
@@ -116,12 +121,15 @@ class TimetableWidgetUpdateWorker @AssistedInject constructor(
                     put("endTime", cls.endTime.toString())
                 })
             }
-            prefs.edit().putString("week_classes_$weekStart", arr.toString()).apply()
+            prefs.edit()
+                .putString("week_classes_$weekStart", arr.toString())
+                .remove("week_failed_$weekStart")
+                .apply()
         }
 
         fun schedule(context: Context) {
             val now = LocalDateTime.now()
-            val target = now.toLocalDate().atTime(LocalTime.of(6, 0))
+            val target = now.toLocalDate().atTime(DAILY_REFRESH_TIME)
             val nextRun = if (now.isBefore(target)) target else target.plusDays(1)
             val delayMs = java.time.Duration.between(now, nextRun).toMillis()
 
