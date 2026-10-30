@@ -108,7 +108,9 @@ class TimetableRepository @Inject constructor(
 
             // 주차별 그룹핑 → DB + 위젯 SharedPreferences에 일괄 저장
             val byWeek = allClasses.groupBy { it.weekStart }
-            classDao.replaceWeeks(byWeek.entries.associate { (week, classes) ->
+            // 이번에 수업이 없어진 주가 예전 시간표로 남지 않도록 위젯 주차 캐시를 비우고 새로 쓴다.
+            TimetableWidget.clearWeekCaches(context)
+            classDao.replaceAll(byWeek.entries.associate { (week, classes) ->
                 week.toString() to classes.map { ClassEntity.fromDomain(it) }
             })
             for ((week, classes) in byWeek) {
