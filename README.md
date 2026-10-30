@@ -21,15 +21,16 @@
 - 시간표 조회 (주별, A/B반 필터)
 - 수업 자료 다운로드
 - 공지사항 조회
+- 시험 수업 강조 (중간·기말·MCQ·MEQ·CPX 등)
 - 홈 화면 위젯 (시간표, 시험·종강 D-day)
 - 테마 색 설정 및 수업 칸별 색 반전
 - 자동 로그인
 
 ## 빌드
 
-- Android Studio에서 열고 Gradle Sync 후 실행
+- Android Studio에서 열고 Gradle Sync 후 실행 (Gradle 9.7.1 · AGP 9.4.0을 지원하는 버전 필요)
 - minSdk 26 (Android 8.0)
 
 ## 사용 기술
 
-Kotlin · MVVM · Hilt · Room · OkHttp · Jsoup · WorkManager
+Kotlin · MVVM · Hilt (KSP) · Room · OkHttp · Jsoup · WorkManager
