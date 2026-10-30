@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("com.google.devtools.ksp")
@@ -17,12 +19,25 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    // 릴리즈 서명 정보는 git에 안 올라가는 루트의 keystore.properties에서 읽는다.
+    // 파일이 없으면 debug 키로 서명한다.
+    val keystoreProps = Properties().apply {
+        rootProject.file("keystore.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
+    }
+    val releaseSigning = if (keystoreProps.isEmpty) null else signingConfigs.create("release") {
+        storeFile = rootProject.file(keystoreProps.getProperty("storeFile"))
+        storePassword = keystoreProps.getProperty("storePassword")
+        keyAlias = keystoreProps.getProperty("keyAlias")
+        keyPassword = keystoreProps.getProperty("keyPassword")
+    }
+
     buildTypes {
         release {
             // R8 활성화 — 코드 축소·난독화와 함께 proguard-rules.pro의
             // -assumenosideeffects 규칙으로 android.util.Log 호출을 제거한다.
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            signingConfig = releaseSigning ?: signingConfigs.getByName("debug")
         }
     }
 
