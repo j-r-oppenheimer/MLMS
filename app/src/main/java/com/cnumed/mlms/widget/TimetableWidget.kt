@@ -20,6 +20,7 @@ import com.cnumed.mlms.util.ClassFilter
 import org.json.JSONArray
 import java.time.LocalDate
 import java.time.LocalTime
+import java.time.format.DateTimeFormatter
 
 class TimetableWidget : AppWidgetProvider() {
 
@@ -67,6 +68,7 @@ class TimetableWidget : AppWidgetProvider() {
         // pivot은 이 위젯의 기본 크기(4×4, ref≈260dp)에 맞춰 기본 크기에선 원래 크기 유지.
         private const val SIZE_DAMP = 0.55
         private const val SIZE_PIVOT_DP = 260f
+        private val HH_MM = DateTimeFormatter.ofPattern("HH:mm")
 
         const val KEY_WEEK_OFFSET  = "widget_week_offset"
         // offset이 기준 삼았던 "현재 주 일요일". 실제 달력상 주가 바뀌면 offset을 0으로
@@ -216,7 +218,8 @@ class TimetableWidget : AppWidgetProvider() {
                 val valid = dayClasses.filter { cls ->
                     val s = ceilTo30Min(cls.startTime.hour, cls.startTime.minute) - startH * 60
                     val e = ceilTo30Min(cls.endTime.hour, cls.endTime.minute) - startH * 60
-                    s >= 0 && e > s && s < totalH * 60
+                    // 표시 범위에 조금이라도 걸치면 남긴다(범위 밖 부분은 잘라 그리고 시각을 따로 적는다)
+                    e > 0 && e > s && s < totalH * 60
                 }
 
                 val sorted = valid.sortedWith(compareBy({ it.startTime }, { it.title }))
@@ -246,8 +249,9 @@ class TimetableWidget : AppWidgetProvider() {
                     val bw = right - x
                     val s  = ceilTo30Min(cls.startTime.hour, cls.startTime.minute) - startH * 60
                     val e  = ceilTo30Min(cls.endTime.hour, cls.endTime.minute) - startH * 60
+                    val sCapped = s.coerceAtLeast(0)
                     val eCapped = e.coerceAtMost(totalH * 60)
-                    val y1 = headerH + s / 60f * hourH
+                    val y1 = headerH + sCapped / 60f * hourH
                     val y2 = headerH + eCapped / 60f * hourH
                     // 맨 아래 교시까지 닿는 블록은 위젯 하단 끝까지 붙인다(우측과 동일한 이유).
                     val bottomTrim = if (eCapped >= totalH * 60) 0f else 1f
@@ -449,9 +453,19 @@ class TimetableWidget : AppWidgetProvider() {
                 blockPaint.alpha = blockAlpha
                 canvas.drawRoundRect(RectF(layout.x, layout.y1, layout.x + layout.bw, layout.y1 + layout.bh), 3f, 3f, blockPaint)
 
-                // 교수 이름 공간을 미리 예약해 제목 클리핑 높이 결정
-                val hasProfessor = cls.professor.isNotEmpty()
-                val profSpace = if (hasProfessor) profLineH + 4f else 0f
+                // 표시 범위(9~18시) 밖으로 나가는 수업은 잘린 쪽 시각을 교수 이름 아래에 적는다.
+                val startsEarly = cls.startTime.isBefore(LocalTime.of(startH, 0))
+                val endsLate = cls.endTime.isAfter(LocalTime.of(endH, 0))
+                val timeNote = when {
+                    startsEarly && endsLate -> "${cls.startTime.format(HH_MM)}~${cls.endTime.format(HH_MM)}"
+                    startsEarly -> "${cls.startTime.format(HH_MM)}~"
+                    endsLate -> "~${cls.endTime.format(HH_MM)}"
+                    else -> null
+                }
+                val subLines = listOfNotNull(cls.professor.ifEmpty { null }, timeNote)
+
+                // 교수 이름·시각 줄 공간을 미리 예약해 제목 클리핑 높이 결정
+                val profSpace = subLines.size * (profLineH + 4f)
                 val titleMaxH = (layout.bh - 6f - profSpace).coerceAtLeast(titleLineH)
 
                 val textLayout = android.text.StaticLayout.Builder.obtain(
@@ -470,12 +484,12 @@ class TimetableWidget : AppWidgetProvider() {
                 textLayout.draw(canvas)
                 canvas.restore()
 
-                if (hasProfessor) {
-                    val actualTitleH = textLayout.height.toFloat().coerceAtMost(titleMaxH)
-                    val profY = layout.y1 + 3f + actualTitleH + 4f
-                    if (profY + profLineH < layout.y1 + layout.bh) {
-                        canvas.drawText(cls.professor, layout.x + 3f, profY - profFm.ascent, profPaint)
-                    }
+                val actualTitleH = textLayout.height.toFloat().coerceAtMost(titleMaxH)
+                var lineY = layout.y1 + 3f + actualTitleH + 4f
+                for (line in subLines) {
+                    if (lineY + profLineH >= layout.y1 + layout.bh) break
+                    canvas.drawText(line, layout.x + 3f, lineY - profFm.ascent, profPaint)
+                    lineY += profLineH + 4f
                 }
             }
             return bitmap
