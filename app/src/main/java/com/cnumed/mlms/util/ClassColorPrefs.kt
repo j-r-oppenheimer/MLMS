@@ -18,7 +18,7 @@ object ClassColorPrefs {
     private const val PREFS = "class_settings"
     private const val KEY_INVERTED = "inverted_classes"
 
-    private val examKeywords = listOf("시험", "중간", "기말", "평가")
+    private val examKeywords = listOf("시험", "중간", "기말", "평가", "MCQ", "MEQ", "CPX")
 
     /** "시험관"처럼 시험이 아닌데 키워드를 품고 있는 단어는 매칭 전에 제거한다. */
     private val examFalsePositives = listOf("시험관")
@@ -26,7 +26,7 @@ object ClassColorPrefs {
     fun isExamClass(title: String): Boolean {
         var t = title
         for (word in examFalsePositives) t = t.replace(word, "")
-        return examKeywords.any { it in t }
+        return examKeywords.any { t.contains(it, ignoreCase = true) }
     }
 
     // 색상 휠(RYB) <-> RGB 색상각 대응표 — 미술 색상환 기준 보색을 얻기 위한 것.
