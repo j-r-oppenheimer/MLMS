@@ -5,6 +5,8 @@ import android.content.res.Configuration
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.DashPathEffect
 import android.graphics.RectF
 import android.text.Layout
 import android.text.StaticLayout
@@ -65,6 +67,11 @@ class TimetableView @JvmOverloads constructor(
         isFakeBoldText = true
     }
     private val subTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.parseColor("#EEEEEE") }
+    /** 시간표 범위(9~19시) 밖으로 이어지는 수업의 잘린 경계 표시 */
+    private val cutEdgePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+        color = Color.argb(220, 255, 255, 255)
+    }
 
     private fun updateThemeColors() {
         val uiMode = context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK
@@ -203,7 +210,11 @@ class TimetableView @JvmOverloads constructor(
         }
     }
 
-    private data class BlockLayout(val x: Float, val w: Float, val y1: Float, val h: Float)
+    /** cutTop/cutBottom: 수업이 시간표 위·아래 경계 밖으로 이어져 그 경계에서 잘렸는지 */
+    private data class BlockLayout(
+        val x: Float, val w: Float, val y1: Float, val h: Float,
+        val cutTop: Boolean = false, val cutBottom: Boolean = false,
+    )
 
     /** 같은 요일에서 두 수업의 시간이 겹치는지 확인 */
     private fun timesOverlap(s1: LocalTime, e1: LocalTime, s2: LocalTime, e2: LocalTime) =
@@ -250,10 +261,22 @@ class TimetableView @JvmOverloads constructor(
                 val gap = if (totalLanes > 1) 1f * dp else 0f
                 val slotW = (colW - 2 * padding - gap * (totalLanes - 1)) / totalLanes
                 val x = colX + padding + lane * (slotW + gap)
-                val y1 = timeToY(cls.startTime)
-                val y2 = timeToY(cls.endTime)
-                val h = (y2 - y1 - 2f * dp).coerceAtLeast(0f)
-                result[cls] = BlockLayout(x, slotW.coerceAtLeast(4f * dp), y1, h)
+                // 시간표 범위(9~19시)를 벗어난 부분은 경계에서 자른다 — 요일 머리글을 덮지 않도록
+                val gridTop = headerH
+                val gridBottom = headerH + totalHours * hourH
+                val rawY1 = timeToY(cls.startTime)
+                val rawY2 = timeToY(cls.endTime)
+                val cutTop = rawY1 < gridTop
+                val cutBottom = rawY2 > gridBottom
+                var y1 = rawY1.coerceIn(gridTop, gridBottom)
+                var y2 = rawY2.coerceIn(gridTop, gridBottom)
+                // 범위 밖에만 있는 수업도 보이도록 경계에 얇은 띠로 남긴다
+                val minH = 16f * dp
+                if ((cutTop || cutBottom) && y2 - y1 < minH) {
+                    if (cutTop) y2 = (y1 + minH).coerceAtMost(gridBottom) else y1 = (y2 - minH).coerceAtLeast(gridTop)
+                }
+                val h = (y2 - y1 - if (cutBottom) 0f else 2f * dp).coerceAtLeast(0f)
+                result[cls] = BlockLayout(x, slotW.coerceAtLeast(4f * dp), y1, h, cutTop, cutBottom)
             }
         }
         return result
@@ -276,7 +299,24 @@ class TimetableView @JvmOverloads constructor(
                 cls.title, cls.date, cls.startTime,
                 blockColor, invertedKeys, examHighlightEnabled, isDarkMode
             )
-            canvas.drawRoundRect(RectF(layout.x, layout.y1, layout.x + layout.w, layout.y1 + layout.h), 6f * dp, 6f * dp, blockPaint)
+            val r = 6f * dp
+            val rect = RectF(layout.x, layout.y1, layout.x + layout.w, layout.y1 + layout.h)
+            if (!layout.cutTop && !layout.cutBottom) {
+                canvas.drawRoundRect(rect, r, r, blockPaint)
+            } else {
+                // 잘린 쪽은 각지게 + 점선으로 경계 표시
+                val tr = if (layout.cutTop) 0f else r
+                val br = if (layout.cutBottom) 0f else r
+                val path = Path().apply {
+                    addRoundRect(rect, floatArrayOf(tr, tr, tr, tr, br, br, br, br), Path.Direction.CW)
+                }
+                canvas.drawPath(path, blockPaint)
+                cutEdgePaint.strokeWidth = 1.5f * dp
+                cutEdgePaint.pathEffect = DashPathEffect(floatArrayOf(4f * dp, 3f * dp), 0f)
+                val inset = cutEdgePaint.strokeWidth / 2f
+                if (layout.cutTop) canvas.drawLine(rect.left, rect.top + inset, rect.right, rect.top + inset, cutEdgePaint)
+                if (layout.cutBottom) canvas.drawLine(rect.left, rect.bottom - inset, rect.right, rect.bottom - inset, cutEdgePaint)
+            }
 
             // 블록 영역 클리핑 (넘치는 텍스트는 말줄임 없이 그냥 잘림)
             canvas.save()
