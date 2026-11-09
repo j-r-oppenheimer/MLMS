@@ -170,7 +170,7 @@ class SettingsFragment : Fragment() {
         setupConvertSettings()
         setupNameSettings()
 
-        binding.tvAppVersion.text = "MLMS v1.0 — 충남대 의대 학습관리시스템"
+        binding.tvAppVersion.text = "MLMS v${com.cnumed.mlms.BuildConfig.VERSION_NAME} — 충남대 의대 학습관리시스템"
 
         binding.btnLogout.setOnClickListener {
             securePrefs.clearCredentials()
