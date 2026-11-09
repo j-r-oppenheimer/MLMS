@@ -226,7 +226,8 @@ class TimetableView @JvmOverloads constructor(
      */
     private fun buildLayoutMap(colW: Float): Map<ClassItem, BlockLayout> {
         val result = mutableMapOf<ClassItem, BlockLayout>()
-        val byDay = classes.groupBy { it.dayOfWeek }
+        // 00:00~00:00처럼 시간이 없는 항목은 그리지 않는다 (위젯과 같은 규칙)
+        val byDay = classes.filter { it.endTime.isAfter(it.startTime) }.groupBy { it.dayOfWeek }
 
         for ((day, dayClasses) in byDay) {
             val col = day - 1
