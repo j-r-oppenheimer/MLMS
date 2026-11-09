@@ -32,6 +32,10 @@ android {
     }
 
     buildTypes {
+        debug {
+            // 기기에 깔린 release 앱 위에 덮어 설치할 수 있도록 같은 키로 서명 (키가 없으면 기본 debug 키)
+            releaseSigning?.let { signingConfig = it }
+        }
         release {
             // R8 활성화 — 코드 축소·난독화와 함께 proguard-rules.pro의
             // -assumenosideeffects 규칙으로 android.util.Log 호출을 제거한다.
