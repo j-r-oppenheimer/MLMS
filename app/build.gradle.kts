@@ -41,6 +41,13 @@ android {
         }
     }
 
+    // full: PPT → PDF 변환(글꼴·OCR 포함) / lite: 변환 기능 없이 가벼운 버전 — 같은 앱(패키지)이라 서로 덮어 설치된다
+    flavorDimensions += "edition"
+    productFlavors {
+        create("full") { dimension = "edition" }
+        create("lite") { dimension = "edition"; versionNameSuffix = "-lite" }
+    }
+
     buildFeatures {
         viewBinding = true
         buildConfig = true   // BuildConfig.DEBUG로 디버그 전용 로깅을 가른다
@@ -107,6 +114,11 @@ dependencies {
 
     // Security (EncryptedSharedPreferences)
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
+
+    // PPTX → PDF 변환 (Apache PDFBox 안드로이드 포팅 — PDF 작성·글꼴 서브셋 임베딩)
+    "fullImplementation"("com.tom-roush:pdfbox-android:2.0.27.0")
+    // 그림 속 글자 인식(한글+영문) — 모델을 앱에 내장(오프라인, Play 서비스 다운로드 대기 없음)
+    "fullImplementation"("com.google.mlkit:text-recognition-korean:16.0.1")
 
     // org.json is part of the Android SDK — no explicit dependency needed
 }

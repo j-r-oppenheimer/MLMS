@@ -11,6 +11,14 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.lifecycle.lifecycleScope
+import com.cnumed.mlms.convert.ConvertPrefs
+import com.cnumed.mlms.convert.PptxFeature
+import com.google.android.material.dialog.MaterialAlertDialogBuilder
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import androidx.fragment.app.Fragment
 import com.cnumed.mlms.R
 import com.cnumed.mlms.data.remote.SessionManager
@@ -31,6 +39,26 @@ class SettingsFragment : Fragment() {
 
     private var _binding: FragmentSettingsBinding? = null
     private val binding get() = _binding!!
+
+    /** 변환용 글꼴 파일 선택 (여러 개) */
+    private val pickFonts = registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        if (uris.isNullOrEmpty()) return@registerForActivityResult
+        val ctx = requireContext().applicationContext
+        viewLifecycleOwner.lifecycleScope.launch {
+            val added = ArrayList<String>(); val errors = ArrayList<String>()
+            withContext(Dispatchers.IO) {
+                for (u in uris) {
+                    try { added += PptxFeature.importFont(ctx, u) } catch (e: Exception) { errors += (e.message ?: "읽을 수 없는 파일") }
+                }
+            }
+            val msg = buildString {
+                if (added.isNotEmpty()) append("글꼴 추가: ${added.joinToString(", ")}")
+                if (errors.isNotEmpty()) { if (isNotEmpty()) append("\n"); append(errors.distinct().joinToString("\n")) }
+            }
+            Toast.makeText(ctx, msg, Toast.LENGTH_LONG).show()
+            refreshFontList()
+        }
+    }
 
     override fun onCreateView(
         inflater: LayoutInflater,
@@ -131,6 +159,8 @@ class SettingsFragment : Fragment() {
             }
         }
 
+        setupConvertSettings()
+
         binding.tvAppVersion.text = "MLMS v1.0 — 충남대 의대 학습관리시스템"
 
         binding.btnLogout.setOnClickListener {
@@ -142,6 +172,52 @@ class SettingsFragment : Fragment() {
         }
     }
 
+    // ───────── PPT → PDF 변환 ─────────
+    private fun setupConvertSettings() {
+        val ctx = requireContext()
+        // 라이트 버전에는 변환 기능이 없다
+        if (!PptxFeature.AVAILABLE) { binding.layoutPptxSection.visibility = View.GONE; return }
+        val prefs = ConvertPrefs.prefs(ctx)
+        binding.switchPptxPdf.isChecked = ConvertPrefs.pptxToPdf(ctx)
+        binding.switchPptxOcr.isChecked = ConvertPrefs.ocr(ctx)
+        binding.switchFetchFonts.isChecked = ConvertPrefs.fetchFonts(ctx)
+        fun syncEnabled() {
+            binding.layoutPptxOptions.visibility = if (binding.switchPptxPdf.isChecked) View.VISIBLE else View.GONE
+        }
+        syncEnabled()
+        binding.switchPptxPdf.setOnCheckedChangeListener { _, c ->
+            prefs.edit().putBoolean(ConvertPrefs.KEY_PPTX_PDF, c).apply(); syncEnabled()
+        }
+        binding.switchPptxOcr.setOnCheckedChangeListener { _, c -> prefs.edit().putBoolean(ConvertPrefs.KEY_OCR, c).apply() }
+        binding.switchFetchFonts.setOnCheckedChangeListener { _, c -> prefs.edit().putBoolean(ConvertPrefs.KEY_FETCH_FONTS, c).apply() }
+        binding.btnAddFont.setOnClickListener {
+            pickFonts.launch(arrayOf("font/ttf", "font/collection", "font/otf", "font/sfnt", "application/x-font-ttf",
+                "application/x-font-truetype", "application/font-sfnt", "application/vnd.ms-opentype", "application/octet-stream"))
+        }
+        binding.btnClearFonts.setOnClickListener {
+            MaterialAlertDialogBuilder(ctx)
+                .setTitle("추가 글꼴 지우기")
+                .setMessage("직접 추가한 글꼴과 자동으로 받은 글꼴을 모두 지울까요?")
+                .setPositiveButton("지우기") { _, _ ->
+                    PptxFeature.clearFonts(ctx); refreshFontList()
+                }
+                .setNegativeButton("취소", null)
+                .show()
+        }
+        refreshFontList()
+    }
+
+    private fun refreshFontList() {
+        val b = _binding ?: return
+        val ctx = requireContext()
+        val mine = PptxFeature.importedFamilies(ctx)
+        val google = PptxFeature.googleFamilies(ctx)
+        b.tvUserFonts.text = buildString {
+            append("추가한 글꼴: ").append(if (mine.isEmpty()) "없음" else mine.joinToString(", "))
+            if (google.isNotEmpty()) append("\n자동으로 받은 글꼴: ").append(google.joinToString(", "))
+        }
+    }
+
     /** 설정 화면의 컨트롤들을 현재 테마 색으로 틴팅한다. */
     private fun applyThemeColor() {
         val color = ThemeColorManager.getColor(requireContext())
@@ -149,6 +225,11 @@ class SettingsFragment : Fragment() {
         ThemeColorManager.tintOutlinedButton(binding.btnPickColor, color)
         ThemeColorManager.tintFilledButton(binding.btnApplyColor, color)
         ThemeColorManager.tintOutlinedButton(binding.btnLogout, color)
+        ThemeColorManager.tintOutlinedButton(binding.btnAddFont, color)
+        ThemeColorManager.tintOutlinedButton(binding.btnClearFonts, color)
+        ThemeColorManager.tintSwitch(binding.switchPptxPdf, color)
+        ThemeColorManager.tintSwitch(binding.switchPptxOcr, color)
+        ThemeColorManager.tintSwitch(binding.switchFetchFonts, color)
         ThemeColorManager.tintSwitch(binding.switchExamHighlight, color)
         ThemeColorManager.tintSwitch(binding.switchAutoLogin, color)
         ThemeColorManager.tintCompoundButton(binding.radioClassAll, color)

@@ -4,6 +4,8 @@ import android.app.DownloadManager
 import android.content.Context
 import android.os.Environment
 import com.cnumed.mlms.util.AppLog
+import com.cnumed.mlms.convert.ConvertPrefs
+import com.cnumed.mlms.convert.PptxFeature
 import com.cnumed.mlms.data.local.dao.ClassDao
 import com.cnumed.mlms.data.local.entity.ClassEntity
 import com.cnumed.mlms.data.remote.LmsApi
@@ -191,10 +193,12 @@ class TimetableRepository @Inject constructor(
     }
 
     /**
-     * DownloadManager를 사용하여 파일 다운로드.
-     * 시스템 알림바에 진행률이 자동으로 표시됩니다.
+     * 파일 다운로드.
+     *  - 설정의 'PPT → PDF 변환'이 켜져 있고 PPTX면 백그라운드 작업으로 받아서 PDF로 변환해 저장
+     *  - 그 밖에는 DownloadManager (시스템 알림바에 진행률 표시)
+     * @return 사용자에게 보여줄 안내 문구
      */
-    suspend fun downloadFile(file: LessonFile): Result<Long> = withContext(Dispatchers.IO) {
+    suspend fun downloadFile(file: LessonFile): Result<String> = withContext(Dispatchers.IO) {
         try {
             // 1. 서버에 읽음 처리 요청 (이걸 먼저 해야 다운로드 허용됨)
             if (file.attachSeq.isNotEmpty() && file.dataSeq.isNotEmpty()) {
@@ -208,6 +212,19 @@ class TimetableRepository @Inject constructor(
                 )
             }
 
+            val ext = file.fileName.substringAfterLast('.', "").lowercase()
+            val convert = PptxFeature.AVAILABLE && ConvertPrefs.pptxToPdf(context)
+            if (convert && ext in setOf("pptx", "ppsx", "pptm", "potx")) {
+                val pdfName = file.fileName.substringBeforeLast('.') + ".pdf"
+                val origName = file.fileName
+                val notifOn = PptxFeature.enqueueConversion(context, file.downloadUrl, pdfName, origName)
+                return@withContext Result.success(
+                    if (notifOn) "PDF로 변환해서 받는 중 — 알림에서 진행 상황을 볼 수 있어요"
+                    else "PDF로 변환해서 받는 중 (앱 알림이 꺼져 있어 진행 상황은 안 보여요) — 끝나면 다운로드 폴더에 저장됩니다"
+                )
+            }
+            val saveName = file.fileName
+
             // 2. DownloadManager로 다운로드 요청
             val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
             val request = DownloadManager.Request(Uri.parse(file.downloadUrl)).apply {
@@ -216,16 +233,17 @@ class TimetableRepository @Inject constructor(
                 addRequestHeader("User-Agent",
                     "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 " +
                     "(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
-                setTitle(file.fileName)
+                setTitle(saveName)
                 setDescription("MLMS 파일 다운로드")
                 setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-                setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, file.fileName)
+                setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, saveName)
             }
 
             val downloadId = dm.enqueue(request)
             AppLog.d(TAG, "Download enqueued: id=$downloadId, file=${file.fileName}")
 
-            Result.success(downloadId)
+            val note = if (convert && ext == "ppt") " (구형 .ppt는 변환할 수 없어 원본으로 받아요)" else ""
+            Result.success("$saveName 다운로드 시작$note")
         } catch (e: kotlin.coroutines.cancellation.CancellationException) {
             throw e
         } catch (e: Exception) {

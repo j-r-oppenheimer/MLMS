@@ -227,7 +227,7 @@ class TimetableFragment : Fragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             val result = viewModel.downloadFile(file)
             if (result.isSuccess) {
-                Toast.makeText(requireContext(), "${file.fileName} 다운로드 시작", Toast.LENGTH_SHORT).show()
+                Toast.makeText(requireContext(), result.getOrNull(), Toast.LENGTH_SHORT).show()
             } else {
                 Toast.makeText(requireContext(), "다운로드 실패: ${result.exceptionOrNull()?.message}", Toast.LENGTH_SHORT).show()
             }

@@ -123,7 +123,7 @@ class TimetableViewModel @Inject constructor(
         return repository.fetchLessonDetail(lpSeq, currSeq, acaSeq)
     }
 
-    suspend fun downloadFile(file: com.cnumed.mlms.domain.model.LessonFile): Result<Long> = repository.downloadFile(file)
+    suspend fun downloadFile(file: com.cnumed.mlms.domain.model.LessonFile): Result<String> = repository.downloadFile(file)
 
     fun nextWeek() = loadWeek(_uiState.value.weekStart.plusWeeks(1))
     fun previousWeek() = loadWeek(_uiState.value.weekStart.minusWeeks(1))

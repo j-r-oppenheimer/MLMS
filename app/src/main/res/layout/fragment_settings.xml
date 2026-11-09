@@ -163,6 +163,146 @@
 
         </LinearLayout>
 
+        <!-- ───────── PPT → PDF 변환 ───────── -->
+
+        <LinearLayout
+            android:id="@+id/layout_pptx_section"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:layout_marginBottom="24dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="PPT를 고화질 PDF로 바꿔서 받기"
+                    android:textSize="16sp" />
+
+                <androidx.appcompat.widget.SwitchCompat
+                    android:id="@+id/switch_pptx_pdf"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/layout_pptx_options"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:paddingStart="12dp"
+                android:layout_marginTop="4dp"
+                android:visibility="gone">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="PPTX를 받을 때 앱 안에서 바로 PDF로 변환해 다운로드 폴더에 저장합니다. 슬라이드 크기와 원본 글꼴을 유지하고, 사진은 다시 압축하지 않아 화질이 그대로입니다."
+                    android:textSize="13sp"
+                    android:textColor="?android:attr/textColorSecondary"
+                    android:layout_marginBottom="12dp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="그림 속 글자 인식 (OCR)"
+                        android:textSize="15sp" />
+
+                    <androidx.appcompat.widget.SwitchCompat
+                        android:id="@+id/switch_pptx_ocr"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="사진·캡처 이미지 안의 한글/영문도 PDF에서 검색·드래그·복사할 수 있도록 보이지 않는 글자를 겹쳐 둡니다. 그림은 그대로이고, 변환 시간이 늘어납니다."
+                    android:textSize="13sp"
+                    android:textColor="?android:attr/textColorSecondary"
+                    android:layout_marginBottom="12dp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="없는 글꼴 자동으로 받기"
+                        android:textSize="15sp" />
+
+                    <androidx.appcompat.widget.SwitchCompat
+                        android:id="@+id/switch_fetch_fonts"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content" />
+                </LinearLayout>
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="PPT에 쓰인 글꼴이 Google Fonts의 무료 글꼴(예: Noto Sans KR, Work Sans)이면 받아 두었다가 원래 글꼴로 변환합니다."
+                    android:textSize="13sp"
+                    android:textColor="?android:attr/textColorSecondary"
+                    android:layout_marginBottom="12dp" />
+
+                <TextView
+                    android:id="@+id/tv_user_fonts"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="추가한 글꼴: 없음"
+                    android:textSize="15sp"
+                    android:layout_marginBottom="4dp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="기본 내장: 맑은 고딕, 나눔고딕, 나눔명조, Calibri·Arial·Times New Roman과 글자 폭이 같은 호환 글꼴. 그 밖의 글꼴은 PC의 Windows\\Fonts 폴더에 있는 .ttf 파일을 폰으로 옮겨 추가하면 원래 글꼴 그대로 변환됩니다."
+                    android:textSize="13sp"
+                    android:textColor="?android:attr/textColorSecondary"
+                    android:layout_marginBottom="8dp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal">
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_add_font"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="글꼴 파일 추가" />
+
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btn_clear_fonts"
+                        style="@style/Widget.MaterialComponents.Button.OutlinedButton"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="8dp"
+                        android:text="추가 글꼴 지우기" />
+                </LinearLayout>
+            </LinearLayout>
+        </LinearLayout>
+
         <TextView
             android:id="@+id/tv_app_version"
             android:layout_width="wrap_content"
