@@ -273,7 +273,7 @@
                 <TextView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:text="기본 내장: 맑은 고딕, 나눔고딕, 나눔명조, Calibri·Arial·Times New Roman과 글자 폭이 같은 호환 글꼴. 그 밖의 글꼴은 PC의 Windows\\Fonts 폴더에 있는 .ttf 파일을 폰으로 옮겨 추가하면 원래 글꼴 그대로 변환됩니다."
+                    android:text="기본 내장: 나눔고딕, 나눔명조, Calibri·Arial·Times New Roman과 글자 폭이 같은 호환 글꼴. 맑은 고딕 등 그 밖의 글꼴은 PC의 Windows\\Fonts 폴더에 있는 .ttf 파일을 폰으로 옮겨 추가하면 원래 글꼴 그대로 변환됩니다."
                     android:textSize="13sp"
                     android:textColor="?android:attr/textColorSecondary"
                     android:layout_marginBottom="8dp" />
