@@ -252,6 +252,18 @@ class TimetableFragment : Fragment() {
     private fun setupNavigation() {
         binding.btnPrevWeek.setOnClickListener { viewModel.previousWeek() }
         binding.btnNextWeek.setOnClickListener { viewModel.nextWeek() }
+        // 상단 기간(예: 8/16 ~ 8/22)을 두 번 누르면 이번 주로 돌아온다
+        val detector = android.view.GestureDetector(requireContext(), object : android.view.GestureDetector.SimpleOnGestureListener() {
+            override fun onDown(e: android.view.MotionEvent) = true
+            override fun onDoubleTap(e: android.view.MotionEvent): Boolean {
+                viewModel.loadWeek(DateUtils.getWeekStart())
+                return true
+            }
+        })
+        binding.tvWeekRange.setOnTouchListener { v, ev ->
+            if (ev.action == android.view.MotionEvent.ACTION_UP) v.performClick()
+            detector.onTouchEvent(ev)
+        }
     }
 
     private fun observeState() {
