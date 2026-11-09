@@ -40,3 +40,9 @@ keystore.properties
 .DS_Store
 Thumbs.db
 *.orig
+
+# ========================
+# Microsoft 글꼴 (맑은 고딕) — 재배포 불가라 로컬 빌드에만 넣는다
+# ========================
+app/src/full/assets/fonts/ms/
+.kotlin/
