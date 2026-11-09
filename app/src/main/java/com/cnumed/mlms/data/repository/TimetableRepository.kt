@@ -5,6 +5,8 @@ import android.content.Context
 import android.os.Environment
 import com.cnumed.mlms.util.AppLog
 import com.cnumed.mlms.convert.ConvertPrefs
+import com.cnumed.mlms.convert.DownloadMeta
+import com.cnumed.mlms.convert.FileNameFormatter
 import com.cnumed.mlms.convert.PptxFeature
 import com.cnumed.mlms.data.local.dao.ClassDao
 import com.cnumed.mlms.data.local.entity.ClassEntity
@@ -196,9 +198,10 @@ class TimetableRepository @Inject constructor(
      * 파일 다운로드.
      *  - 설정의 'PPT → PDF 변환'이 켜져 있고 PPTX면 백그라운드 작업으로 받아서 PDF로 변환해 저장
      *  - 그 밖에는 DownloadManager (시스템 알림바에 진행률 표시)
+     *  - '파일 이름 자동 지정'이 켜져 있으면 설정한 형식으로 저장 이름을 만든다
      * @return 사용자에게 보여줄 안내 문구
      */
-    suspend fun downloadFile(file: LessonFile): Result<String> = withContext(Dispatchers.IO) {
+    suspend fun downloadFile(file: LessonFile, meta: DownloadMeta? = null): Result<String> = withContext(Dispatchers.IO) {
         try {
             // 1. 서버에 읽음 처리 요청 (이걸 먼저 해야 다운로드 허용됨)
             if (file.attachSeq.isNotEmpty() && file.dataSeq.isNotEmpty()) {
@@ -215,15 +218,15 @@ class TimetableRepository @Inject constructor(
             val ext = file.fileName.substringAfterLast('.', "").lowercase()
             val convert = PptxFeature.AVAILABLE && ConvertPrefs.pptxToPdf(context)
             if (convert && ext in setOf("pptx", "ppsx", "pptm", "potx")) {
-                val pdfName = file.fileName.substringBeforeLast('.') + ".pdf"
-                val origName = file.fileName
+                val pdfName = FileNameFormatter.resolve(context, file.fileName, meta, "pdf")
+                val origName = FileNameFormatter.resolve(context, file.fileName, meta)
                 val notifOn = PptxFeature.enqueueConversion(context, file.downloadUrl, pdfName, origName)
                 return@withContext Result.success(
                     if (notifOn) "PDF로 변환해서 받는 중 — 알림에서 진행 상황을 볼 수 있어요"
                     else "PDF로 변환해서 받는 중 (앱 알림이 꺼져 있어 진행 상황은 안 보여요) — 끝나면 다운로드 폴더에 저장됩니다"
                 )
             }
-            val saveName = file.fileName
+            val saveName = FileNameFormatter.resolve(context, file.fileName, meta)
 
             // 2. DownloadManager로 다운로드 요청
             val dm = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager

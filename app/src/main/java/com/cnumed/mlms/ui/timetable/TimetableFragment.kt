@@ -205,7 +205,14 @@ class TimetableFragment : Fragment() {
                                 this.textSize = textSize
                                 setTextColor(0xFF1976D2.toInt())
                                 setPadding(0, (4 * density).toInt(), 0, (4 * density).toInt())
-                                setOnClickListener { downloadFile(file) }
+                                setOnClickListener {
+                                    downloadFile(file, com.cnumed.mlms.convert.FileNameFormatter.metaFor(
+                                        lessonDate = cls.date,
+                                        subject = detail.subject,
+                                        title = cls.title,
+                                        professor = cls.professor,
+                                    ))
+                                }
                             })
                         }
                     }
@@ -223,9 +230,9 @@ class TimetableFragment : Fragment() {
             .show()
     }
 
-    private fun downloadFile(file: LessonFile) {
+    private fun downloadFile(file: LessonFile, meta: com.cnumed.mlms.convert.DownloadMeta) {
         viewLifecycleOwner.lifecycleScope.launch {
-            val result = viewModel.downloadFile(file)
+            val result = viewModel.downloadFile(file, meta)
             if (result.isSuccess) {
                 Toast.makeText(requireContext(), result.getOrNull(), Toast.LENGTH_SHORT).show()
             } else {

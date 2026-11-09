@@ -11,14 +11,22 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.Toast
+import android.text.Editable
+import android.text.TextWatcher
+import android.widget.AdapterView
+import android.widget.ArrayAdapter
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.lifecycleScope
 import com.cnumed.mlms.convert.ConvertPrefs
+import com.cnumed.mlms.convert.DownloadMeta
+import com.cnumed.mlms.convert.FileNameFormatter
 import com.cnumed.mlms.convert.PptxFeature
+import com.google.android.material.chip.Chip
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.time.LocalDate
 import androidx.fragment.app.Fragment
 import com.cnumed.mlms.R
 import com.cnumed.mlms.data.remote.SessionManager
@@ -160,6 +168,7 @@ class SettingsFragment : Fragment() {
         }
 
         setupConvertSettings()
+        setupNameSettings()
 
         binding.tvAppVersion.text = "MLMS v1.0 — 충남대 의대 학습관리시스템"
 
@@ -218,6 +227,77 @@ class SettingsFragment : Fragment() {
         }
     }
 
+    // ───────── 다운로드 파일 이름 ─────────
+    private fun setupNameSettings() {
+        val ctx = requireContext()
+        // 라이트 버전은 다운로드 부가 기능(파일 이름 자동 지정)도 넣지 않는다
+        if (!PptxFeature.AVAILABLE) { binding.layoutNameSection.visibility = View.GONE; return }
+        val prefs = ConvertPrefs.prefs(ctx)
+        binding.switchNameTemplate.isChecked = ConvertPrefs.nameEnabled(ctx)
+        binding.etNameTemplate.setText(ConvertPrefs.nameTemplate(ctx))
+        fun syncEnabled() {
+            binding.layoutNameOptions.visibility = if (binding.switchNameTemplate.isChecked) View.VISIBLE else View.GONE
+        }
+        binding.switchNameTemplate.setOnCheckedChangeListener { _, c ->
+            prefs.edit().putBoolean(ConvertPrefs.KEY_NAME_ENABLED, c).apply(); syncEnabled()
+        }
+
+        // 항목 버튼: 커서 위치에 삽입
+        val color = ThemeColorManager.getColor(ctx)
+        FileNameFormatter.TOKENS.forEach { (label, token) ->
+            binding.chipsNameTokens.addView(Chip(ctx).apply {
+                text = label
+                isCheckable = false
+                chipStrokeWidth = 1f * resources.displayMetrics.density
+                chipStrokeColor = android.content.res.ColorStateList.valueOf(color)
+                setTextColor(color)
+                chipBackgroundColor = android.content.res.ColorStateList.valueOf(Color.TRANSPARENT)
+                setOnClickListener {
+                    val et = binding.etNameTemplate
+                    val st = minOf(et.selectionStart, et.selectionEnd).coerceAtLeast(0)
+                    val en = maxOf(et.selectionStart, et.selectionEnd).coerceAtLeast(0)
+                    et.text.replace(st, en, token)
+                    et.setSelection(if (token == "()") st + 1 else st + token.length)
+                    et.requestFocus()
+                }
+            })
+        }
+
+        // 날짜 형식
+        val fmts = FileNameFormatter.DATE_FORMATS
+        val labels = fmts.map { "${FileNameFormatter.dateExample(it)}  ($it)" }
+        binding.spinnerDateFormat.adapter = ArrayAdapter(ctx, android.R.layout.simple_spinner_dropdown_item, labels)
+        binding.spinnerDateFormat.setSelection(fmts.indexOf(ConvertPrefs.dateFormat(ctx)).coerceAtLeast(0))
+        binding.spinnerDateFormat.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(p: AdapterView<*>?, v: View?, pos: Int, id: Long) {
+                prefs.edit().putString(ConvertPrefs.KEY_NAME_DATE_FMT, fmts[pos]).apply(); updateNamePreview()
+            }
+            override fun onNothingSelected(p: AdapterView<*>?) {}
+        }
+
+        binding.etNameTemplate.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun onTextChanged(s: CharSequence?, a: Int, b: Int, c: Int) {}
+            override fun afterTextChanged(s: Editable?) {
+                prefs.edit().putString(ConvertPrefs.KEY_NAME_TEMPLATE, s?.toString() ?: "").apply(); updateNamePreview()
+            }
+        })
+        binding.btnNameReset.setOnClickListener {
+            binding.etNameTemplate.setText(FileNameFormatter.DEFAULT_TEMPLATE)
+            binding.spinnerDateFormat.setSelection(0)
+        }
+        syncEnabled()
+        updateNamePreview()
+    }
+
+    private fun updateNamePreview() {
+        val b = _binding ?: return
+        val ctx = requireContext()
+        val meta = FileNameFormatter.metaFor(LocalDate.of(2026, 4, 18), "파인만의 물리학 강의", "1강 (리처드 파인만)", "")
+        val name = FileNameFormatter.format(b.etNameTemplate.text.toString(), ConvertPrefs.dateFormat(ctx), meta, "1강")
+        b.tvNamePreview.text = "미리보기: $name.pdf"
+    }
+
     /** 설정 화면의 컨트롤들을 현재 테마 색으로 틴팅한다. */
     private fun applyThemeColor() {
         val color = ThemeColorManager.getColor(requireContext())
@@ -227,9 +307,11 @@ class SettingsFragment : Fragment() {
         ThemeColorManager.tintOutlinedButton(binding.btnLogout, color)
         ThemeColorManager.tintOutlinedButton(binding.btnAddFont, color)
         ThemeColorManager.tintOutlinedButton(binding.btnClearFonts, color)
+        ThemeColorManager.tintOutlinedButton(binding.btnNameReset, color)
         ThemeColorManager.tintSwitch(binding.switchPptxPdf, color)
         ThemeColorManager.tintSwitch(binding.switchPptxOcr, color)
         ThemeColorManager.tintSwitch(binding.switchFetchFonts, color)
+        ThemeColorManager.tintSwitch(binding.switchNameTemplate, color)
         ThemeColorManager.tintSwitch(binding.switchExamHighlight, color)
         ThemeColorManager.tintSwitch(binding.switchAutoLogin, color)
         ThemeColorManager.tintCompoundButton(binding.radioClassAll, color)
